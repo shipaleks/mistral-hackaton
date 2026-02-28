@@ -15,6 +15,7 @@ training/audio/
 training/transcripts/
 training/transcripts_normalized/
 training/artifacts/
+training/pilot/
 training/examples_raw.jsonl
 training/examples_clean.jsonl
 training/finetune_data.jsonl

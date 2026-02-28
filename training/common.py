@@ -235,21 +235,24 @@ class MistralClient:
         timestamp_granularities: list[str] | None = None,
         language: str | None = None,
     ) -> dict[str, Any]:
-        payload: list[tuple[str, str]] = [("model", model), ("diarize", str(diarize).lower())]
+        multipart: list[tuple[str, Any]] = [
+            ("model", (None, model)),
+            ("diarize", (None, str(diarize).lower())),
+        ]
         if language:
-            payload.append(("language", language))
+            multipart.append(("language", (None, language)))
         for granularity in timestamp_granularities or []:
-            payload.append(("timestamp_granularities", granularity))
+            multipart.append(("timestamp_granularities", (None, granularity)))
 
         with audio_file.open("rb") as fh:
-            files = {"file": (audio_file.name, fh, "application/octet-stream")}
-            return self._request("POST", "/audio/transcriptions", data=payload, files=files)
+            multipart.append(("file", (audio_file.name, fh, "application/octet-stream")))
+            return self._request("POST", "/audio/transcriptions", files=multipart)
 
     def upload_file(self, *, file_path: Path, purpose: str = "fine-tune") -> dict[str, Any]:
-        payload = [("purpose", purpose)]
+        multipart: list[tuple[str, Any]] = [("purpose", (None, purpose))]
         with file_path.open("rb") as fh:
-            files = {"file": (file_path.name, fh, "application/jsonl")}
-            return self._request("POST", "/files", data=payload, files=files)
+            multipart.append(("file", (file_path.name, fh, "application/jsonl")))
+            return self._request("POST", "/files", files=multipart)
 
     def create_fine_tuning_job(
         self, *, payload: dict[str, Any], dry_run: bool | None = None
@@ -264,4 +267,3 @@ class MistralClient:
 
     def get_fine_tuning_job(self, *, job_id: str) -> dict[str, Any]:
         return self._request("GET", f"/fine_tuning/jobs/{job_id}")
-

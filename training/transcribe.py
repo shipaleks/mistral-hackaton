@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -99,6 +102,129 @@ def _output_paths(input_dir: Path, output_dir: Path, audio_path: Path) -> tuple[
     return normalized_path, raw_path
 
 
+def _probe_duration_seconds(audio_path: Path) -> float:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "csv=p=0",
+        str(audio_path),
+    ]
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return float(result.stdout.strip() or "0")
+
+
+def _split_audio_chunks(audio_path: Path, chunk_seconds: int) -> tuple[list[tuple[Path, float]], Path | None]:
+    duration = _probe_duration_seconds(audio_path)
+    if duration <= 0:
+        return [(audio_path, 0.0)], None
+
+    chunk_paths: list[tuple[Path, float]] = []
+    temp_dir = tempfile.mkdtemp(prefix="voxtral_chunks_")
+    start = 0.0
+    index = 0
+    while start < duration:
+        out_path = Path(temp_dir) / f"{audio_path.stem}.chunk{index:03d}{audio_path.suffix}"
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            str(start),
+            "-t",
+            str(chunk_seconds),
+            "-i",
+            str(audio_path),
+            "-c",
+            "copy",
+            str(out_path),
+        ]
+        subprocess.run(cmd, check=True)
+        chunk_paths.append((out_path, start))
+        start += chunk_seconds
+        index += 1
+    return chunk_paths, Path(temp_dir)
+
+
+def _merge_chunked_transcriptions(
+    *,
+    chunks: list[tuple[dict[str, Any], float, int]],
+    audio_path: Path,
+    model: str,
+    diarize: bool,
+) -> dict[str, Any]:
+    merged_segments: list[dict[str, Any]] = []
+    texts: list[str] = []
+    speaker_ids: set[str] = set()
+    language: str | None = None
+    prompt_audio_seconds = 0
+    segment_index = 0
+
+    for normalized, offset, chunk_idx in chunks:
+        chunk_text = str(normalized.get("text", "")).strip()
+        if chunk_text:
+            texts.append(chunk_text)
+        if language is None:
+            language = normalized.get("language")
+
+        usage = normalized.get("usage")
+        if isinstance(usage, dict):
+            value = usage.get("prompt_audio_seconds")
+            if isinstance(value, int):
+                prompt_audio_seconds += value
+
+        for segment in normalized.get("segments", []):
+            if not isinstance(segment, dict):
+                continue
+            try:
+                start = float(segment.get("start", 0.0)) + offset
+            except (TypeError, ValueError):
+                start = offset
+            try:
+                end = float(segment.get("end", start)) + offset
+            except (TypeError, ValueError):
+                end = start
+
+            source_speaker = segment.get("speaker_id")
+            if source_speaker is None:
+                speaker = None
+            else:
+                speaker = f"chunk{chunk_idx}:{str(source_speaker).strip()}"
+                speaker_ids.add(speaker)
+
+            merged_segments.append(
+                {
+                    "index": segment_index,
+                    "start": start,
+                    "end": end,
+                    "text": str(segment.get("text", "")).strip(),
+                    "speaker_id": speaker,
+                    "score": segment.get("score"),
+                }
+            )
+            segment_index += 1
+
+    return {
+        "audio_path": str(audio_path.resolve()),
+        "audio_filename": audio_path.name,
+        "model": model,
+        "diarize": diarize,
+        "language": language,
+        "text": "\n".join(texts).strip(),
+        "segments": merged_segments,
+        "speaker_ids": sorted(speaker_ids),
+        "usage": {"prompt_audio_seconds": prompt_audio_seconds},
+        "chunked": True,
+        "chunk_count": len(chunks),
+        "transcribed_at": now_iso(),
+    }
+
+
 def _transcribe_one(
     *,
     client: MistralClient,
@@ -110,6 +236,8 @@ def _transcribe_one(
     language: str | None,
     resume: bool,
     timestamp_granularities: list[str],
+    max_upload_mb: int,
+    chunk_seconds: int,
 ) -> dict[str, Any]:
     normalized_path, raw_path = _output_paths(input_dir, output_dir, audio_path)
     if resume and normalized_path.exists() and raw_path.exists():
@@ -123,19 +251,71 @@ def _transcribe_one(
             "updated_at": now_iso(),
         }
 
-    raw = client.transcribe(
-        model=model,
-        audio_file=audio_path,
-        diarize=diarize,
-        timestamp_granularities=timestamp_granularities,
-        language=language,
-    )
-    normalized = normalize_transcription_response(
-        raw=raw,
-        audio_path=audio_path,
-        model=model,
-        diarize=diarize,
-    )
+    file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+    force_chunk = file_size_mb > max_upload_mb
+
+    normalized: dict[str, Any]
+    raw: dict[str, Any] | list[dict[str, Any]]
+    used_chunking = False
+    chunk_temp_dir: Path | None = None
+
+    try:
+        if force_chunk:
+            raise RuntimeError(
+                f"File size {file_size_mb:.1f}MB exceeds --max-upload-mb={max_upload_mb}, switching to chunked mode"
+            )
+        raw = client.transcribe(
+            model=model,
+            audio_file=audio_path,
+            diarize=diarize,
+            timestamp_granularities=timestamp_granularities,
+            language=language,
+        )
+        normalized = normalize_transcription_response(
+            raw=raw,
+            audio_path=audio_path,
+            model=model,
+            diarize=diarize,
+        )
+    except Exception:  # noqa: BLE001
+        used_chunking = True
+        raw_chunks: list[dict[str, Any]] = []
+        normalized_chunks: list[tuple[dict[str, Any], float, int]] = []
+        try:
+            chunk_paths, chunk_temp_dir = _split_audio_chunks(audio_path, chunk_seconds)
+            for chunk_idx, (chunk_path, offset) in enumerate(chunk_paths):
+                chunk_raw = client.transcribe(
+                    model=model,
+                    audio_file=chunk_path,
+                    diarize=diarize,
+                    timestamp_granularities=timestamp_granularities,
+                    language=language,
+                )
+                raw_chunks.append(
+                    {
+                        "chunk_index": chunk_idx,
+                        "offset_seconds": offset,
+                        "raw": chunk_raw,
+                    }
+                )
+                chunk_norm = normalize_transcription_response(
+                    raw=chunk_raw,
+                    audio_path=chunk_path,
+                    model=model,
+                    diarize=diarize,
+                )
+                normalized_chunks.append((chunk_norm, offset, chunk_idx))
+        finally:
+            if chunk_temp_dir is not None and chunk_temp_dir.exists():
+                shutil.rmtree(chunk_temp_dir, ignore_errors=True)
+
+        raw = {"chunked": True, "chunks": raw_chunks}
+        normalized = _merge_chunked_transcriptions(
+            chunks=normalized_chunks,
+            audio_path=audio_path,
+            model=model,
+            diarize=diarize,
+        )
 
     ensure_parent(normalized_path)
     ensure_parent(raw_path)
@@ -148,6 +328,8 @@ def _transcribe_one(
         "output_path": str(normalized_path.resolve()),
         "raw_output_path": str(raw_path.resolve()),
         "model": model,
+        "chunked": used_chunking,
+        "file_size_mb": round(file_size_mb, 2),
         "language": normalized.get("language"),
         "segments": len(normalized.get("segments", [])),
         "updated_at": now_iso(),
@@ -172,6 +354,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--language", default="", help="Optional fixed language (e.g. en)")
     parser.add_argument("--limit", type=int, default=0, help="Optional cap on number of files")
+    parser.add_argument(
+        "--max-upload-mb",
+        type=int,
+        default=20,
+        help="If file exceeds this size, use chunked transcription fallback (default: 20)",
+    )
+    parser.add_argument(
+        "--chunk-seconds",
+        type=int,
+        default=900,
+        help="Chunk size in seconds for fallback mode (default: 900)",
+    )
     parser.add_argument(
         "--timestamp-granularity",
         action="append",
@@ -227,6 +421,8 @@ def main() -> int:
             language=language,
             resume=args.resume,
             timestamp_granularities=timestamp_granularities,
+            max_upload_mb=max(1, int(args.max_upload_mb)),
+            chunk_seconds=max(60, int(args.chunk_seconds)),
         )
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
