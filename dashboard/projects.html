@@ -3,297 +3,449 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eidetic Demo Console</title>
+    <title>Eidetic</title>
     <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <style>
       :root {
-        --bg: #f4f4f0;
-        --panel: #fffef8;
-        --line: #d9d7cc;
-        --ink: #1e1e18;
-        --muted: #68685d;
-        --green: #0f766e;
-        --amber: #b45309;
-        --red: #b91c1c;
+        --bg: #f7f5ef;
+        --panel: #fffdf8;
+        --line: #d8d5c8;
+        --ink: #171717;
+        --muted: #686868;
         --accent: #0f766e;
+        --accent-soft: #ecfdf5;
+        --warn: #b45309;
+        --warn-soft: #fffbeb;
+        --danger: #b91c1c;
+        --danger-soft: #fef2f2;
       }
+
       * {
         box-sizing: border-box;
       }
+
       body {
         margin: 0;
         color: var(--ink);
-        background: radial-gradient(circle at top left, #efebe0, #f6f7f2 65%);
-        font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at top left, #f2ecde 0%, #f7f5ef 50%, #faf9f4 100%);
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
+
       .layout {
+        min-height: 100vh;
         display: grid;
         grid-template-columns: 320px 1fr;
-        min-height: 100vh;
       }
+
       .sidebar {
         border-right: 1px solid var(--line);
-        background: #f5f3ea;
+        background: #f2f0e8;
         padding: 16px;
       }
-      .content {
+
+      .main {
         padding: 16px;
+        display: grid;
+        gap: 12px;
+        align-content: start;
       }
-      .brand {
-        margin-bottom: 14px;
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
       }
-      .brand h1 {
+
+      h1,
+      h2,
+      h3,
+      h4,
+      p {
         margin: 0;
+      }
+
+      h1 {
         font-size: 24px;
       }
-      .brand p {
-        margin: 4px 0 0;
+
+      h2 {
+        font-size: 18px;
+      }
+
+      h3 {
+        font-size: 16px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      .muted {
         color: var(--muted);
         font-size: 13px;
       }
-      .status-pill {
-        display: inline-block;
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .pill {
         border: 1px solid var(--line);
         border-radius: 999px;
-        padding: 3px 8px;
+        padding: 4px 8px;
         font-size: 11px;
         background: #fff;
         color: var(--muted);
       }
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 12px;
-      }
-      .projects-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 10px;
-      }
-      .project-list {
-        display: grid;
-        gap: 8px;
-        max-height: calc(100vh - 190px);
-        overflow: auto;
-      }
-      .project-item {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 10px;
-        background: #fff;
-        cursor: pointer;
-      }
-      .project-item.active {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent) inset;
-      }
-      .project-item h4 {
-        margin: 0;
-        font-size: 14px;
-      }
-      .project-meta {
-        margin-top: 6px;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.35;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-      .grid-full {
-        grid-column: 1 / -1;
-      }
-      label {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-        margin-bottom: 6px;
-      }
-      input,
-      textarea {
-        width: 100%;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 8px;
-        font-size: 14px;
-        font-family: inherit;
-        background: #fff;
-      }
-      textarea {
-        min-height: 78px;
-        resize: vertical;
-      }
-      .row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      button {
-        border: 1px solid var(--line);
-        background: #fff;
-        border-radius: 8px;
-        padding: 8px 12px;
-        cursor: pointer;
-      }
-      button.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-      }
-      button.warn {
-        background: #fff7ed;
-        border-color: #fdba74;
-        color: #7c2d12;
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .helper {
-        margin-top: 8px;
-        font-size: 12px;
-        color: var(--muted);
-        white-space: pre-wrap;
-      }
-      .alert {
-        margin-top: 8px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 8px;
-        font-size: 12px;
-        line-height: 1.4;
-        background: #fff;
-      }
-      .alert.ok {
+
+      .pill.ok {
         border-color: #86efac;
         background: #f0fdf4;
         color: #166534;
       }
-      .alert.warn {
+
+      .pill.warn {
+        border-color: #fdba74;
+        background: #fff7ed;
+        color: #9a3412;
+      }
+
+      .pill.error {
         border-color: #fca5a5;
         background: #fef2f2;
         color: #991b1b;
       }
-      .error {
-        color: var(--red);
-      }
-      .stats {
+
+      .form {
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 8px;
       }
-      .metric {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 8px;
-        background: #fff;
-      }
-      .metric .k {
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .metric .v {
-        font-size: 18px;
-        font-weight: 700;
-        margin-top: 2px;
-      }
-      .talk-block {
+
+      label {
         display: grid;
-        grid-template-columns: 1fr 128px;
-        gap: 10px;
-        margin-top: 10px;
-      }
-      .talk-link {
-        font-size: 13px;
-        word-break: break-all;
-      }
-      .qr {
-        width: 128px;
-        height: 128px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fff;
-        object-fit: contain;
-      }
-      #graph {
-        width: 100%;
-        height: 460px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #fff;
-      }
-      #saturation {
-        width: 100%;
-        height: 170px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #fff;
-      }
-      .legend {
-        margin-top: 8px;
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
+        gap: 6px;
         font-size: 12px;
         color: var(--muted);
       }
-      .dot {
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        padding: 8px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      textarea {
+        min-height: 92px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      button {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        padding: 8px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button.warn {
+        border-color: #fdba74;
+        background: #fff7ed;
+        color: #9a3412;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .status {
+        min-height: 18px;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: pre-wrap;
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .projects-list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+        max-height: calc(100vh - 320px);
+        overflow: auto;
+      }
+
+      .project-item {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        cursor: pointer;
+        display: grid;
+        gap: 6px;
+      }
+
+      .project-item.active {
+        border-color: var(--accent);
+        box-shadow: inset 0 0 0 1px var(--accent);
+      }
+
+      .project-title {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+
+      .project-meta {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .project-meta strong {
+        font-weight: 700;
+      }
+
+      .flow-head {
+        display: grid;
+        gap: 8px;
+      }
+
+      .flow-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .flow-steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .step {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .step small {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .talk-layout {
+        display: grid;
+        grid-template-columns: 1fr 140px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .talk-link {
+        font-size: 13px;
+        word-break: break-all;
+        color: #0f172a;
+      }
+
+      .qr {
+        width: 140px;
+        height: 140px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        object-fit: contain;
+        background: #fff;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px;
+      }
+
+      .metric .k {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .metric .v {
+        margin-top: 3px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .graph-wrap {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 10px;
+      }
+
+      .graph-canvas {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        width: 100%;
+        height: 560px;
+      }
+
+      .graph-side {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        padding: 10px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+        max-height: 560px;
+        overflow: auto;
+      }
+
+      .graph-rule {
+        border-left: 3px solid var(--accent);
+        background: var(--accent-soft);
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .mini-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .legend-dot {
         display: inline-flex;
         align-items: center;
         gap: 6px;
       }
-      .dot::before {
+
+      .legend-dot::before {
         content: "";
         width: 10px;
         height: 10px;
         border-radius: 999px;
         background: currentColor;
       }
+
       .report-wrap {
-        max-height: 360px;
-        overflow: auto;
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 12px;
         background: #fff;
         padding: 8px;
+        max-height: 460px;
+        overflow: auto;
       }
+
       details {
         border: 1px solid var(--line);
         border-radius: 8px;
-        margin-bottom: 8px;
-        padding: 8px;
         background: #fff;
+        padding: 8px;
+        margin-bottom: 8px;
       }
+
       summary {
         cursor: pointer;
         font-weight: 600;
       }
-      .mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        white-space: pre-wrap;
+
+      .danger-box {
+        border: 1px solid #fca5a5;
+        background: var(--danger-soft);
+        color: #7f1d1d;
+        border-radius: 10px;
+        padding: 8px;
         font-size: 12px;
         line-height: 1.45;
       }
-      @media (max-width: 1100px) {
+
+      @media (max-width: 1220px) {
         .layout {
           grid-template-columns: 1fr;
         }
+
         .sidebar {
           border-right: 0;
           border-bottom: 1px solid var(--line);
         }
-        .grid {
+
+        .flow-steps {
           grid-template-columns: 1fr;
         }
-        .stats {
+
+        .metrics {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .talk-block {
+
+        .graph-wrap {
           grid-template-columns: 1fr;
+        }
+
+        .graph-canvas {
+          height: 500px;
         }
       }
     </style>
@@ -303,145 +455,211 @@
       <aside class="sidebar">
         <div class="brand">
           <h1>Eidetic</h1>
-          <p>Autonomous qualitative research demo console</p>
-          <div class="status-pill" id="health">health: ...</div>
-        </div>
-        <div class="card">
-          <div class="projects-head">
-            <strong>Projects</strong>
-            <button id="refreshCardsBtn">Refresh</button>
+          <p class="muted">Qualitative research loop: project -> calls -> evidence map -> report</p>
+          <div class="pill-row">
+            <span class="pill" id="healthPill">health: ...</span>
+            <span class="pill" id="livePill">live: ...</span>
           </div>
-          <div class="project-list" id="projectList"></div>
         </div>
-      </aside>
 
-      <main class="content">
-        <div class="grid">
-          <section class="card">
-            <h3>Create Project</h3>
+        <div class="card">
+          <h3>Create Project</h3>
+          <div class="form" style="margin-top:8px;">
             <label>
               Research question
               <textarea id="researchQuestion">What is your experience with this hackathon so far?</textarea>
             </label>
             <div class="row">
-              <button class="primary" id="createProjectBtn">Create</button>
+              <button class="primary" id="createProjectBtn">Create project</button>
             </div>
-            <div class="helper" id="createStatus"></div>
-          </section>
-
-          <section class="card">
-            <h3>Start & Interview Link</h3>
-            <label>
-              ElevenLabs agent id override (optional)
-              <input id="agentId" placeholder="agent_xxx" />
-            </label>
-            <div class="row">
-              <button class="primary" id="startBtn">Start Research</button>
-              <button class="warn" id="finishBtn">Finish & Generate Report</button>
-              <button id="reloadBtn">Reload State</button>
-            </div>
-            <div class="helper" id="controlStatus"></div>
-            <div class="alert warn" id="webhookHealth">No webhook transcript received yet.</div>
-            <div class="talk-block" id="talkBlock" style="display:none;">
-              <div>
-                <div><strong>Talk URL</strong></div>
-                <div class="talk-link" id="talkLink"></div>
-                <div class="row" style="margin-top:8px;">
-                  <button id="openTalkBtn">Open Link</button>
-                  <button id="connectSseBtn">Connect SSE</button>
-                  <button id="disconnectSseBtn">Disconnect SSE</button>
-                </div>
-              </div>
-              <img id="qrImg" class="qr" alt="Project QR" />
-            </div>
-          </section>
-
-          <section class="card grid-full">
-            <h3>Live Saturation Metrics</h3>
-            <div class="stats" id="stats"></div>
-            <svg id="saturation"></svg>
-            <div class="legend" id="modeLabel"></div>
-          </section>
-
-          <section class="card grid-full">
-            <h3>Knowledge Graph (Evidence)</h3>
-            <svg id="graph"></svg>
-            <div class="legend">
-              <span class="dot" style="color:#16a34a;">confirmed overlay</span>
-              <span class="dot" style="color:#eab308;">exploring overlay</span>
-              <span class="dot" style="color:#dc2626;">challenged overlay</span>
-              <span class="dot" style="color:#9ca3af;">weak/merged overlay</span>
-            </div>
-          </section>
-
-          <section class="card grid-full">
-            <h3>Report</h3>
-            <div class="row">
-              <label style="display:flex;align-items:center;gap:6px;color:var(--ink);">
-                <input type="checkbox" id="rawToggle" style="width:auto;" />
-                Raw markdown
-              </label>
-            </div>
-            <div class="helper" id="reportStatus"></div>
-            <div class="report-wrap" id="reportView"></div>
-          </section>
+            <div class="status" id="createStatus"></div>
+          </div>
         </div>
+
+        <div class="card" style="margin-top:10px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3>Projects</h3>
+            <span class="pill">auto refresh</span>
+          </div>
+          <div id="projectsList" class="projects-list"></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="card flow-head">
+          <div class="flow-top">
+            <div>
+              <h2 id="projectTitle">Select or create a project</h2>
+              <p class="muted" id="projectQuestion">Research question will appear here.</p>
+            </div>
+            <span class="pill" id="projectStatusPill">status: draft</span>
+          </div>
+
+          <div class="flow-steps">
+            <article class="step">
+              <strong>1. Start Research</strong>
+              <small>Generate first script and sync prompt to ElevenLabs.</small>
+              <label>
+                Agent ID (optional override)
+                <input id="agentId" placeholder="agent_xxx" />
+              </label>
+              <div class="row">
+                <button class="primary" id="startBtn">Start research</button>
+              </div>
+            </article>
+
+            <article class="step">
+              <strong>2. Interview Link</strong>
+              <small>Share this link or QR. After a call ends, evidence appears automatically.</small>
+              <div id="talkBlock" style="display:none;" class="talk-layout">
+                <div>
+                  <div class="talk-link" id="talkLink"></div>
+                  <div class="row" style="margin-top:8px;">
+                    <button id="openTalkBtn">Open interview link</button>
+                  </div>
+                </div>
+                <img id="qrImg" class="qr" alt="Interview QR code" />
+              </div>
+              <div class="muted" id="talkPlaceholder">Start project first to generate interview link and QR.</div>
+            </article>
+
+            <article class="step">
+              <strong>3. Finish</strong>
+              <small>Generate a report from ingested evidence.</small>
+              <div class="row">
+                <button class="warn" id="finishBtn">Finish & generate report</button>
+              </div>
+              <div class="danger-box" id="ingestionHint">
+                Waiting for first transcript via webhook.
+              </div>
+            </article>
+          </div>
+
+          <div class="status" id="controlStatus"></div>
+        </section>
+
+        <section class="card">
+          <h2>Evidence Map</h2>
+          <p class="muted" style="margin-top:4px;">
+            Node = one evidence item. Label = evidence ID. Color = interview index. Size = how connected the evidence is.
+            Edge appears when similarity score >= 0.70 using proposition overlap (45%), tag overlap (35%), and factor/mechanism/outcome token overlap (20%).
+            Shaded overlay groups evidence supporting the same proposition.
+          </p>
+
+          <div class="metrics" id="metrics" style="margin-top:10px;"></div>
+
+          <div class="graph-wrap">
+            <div>
+              <svg id="graph" class="graph-canvas"></svg>
+              <div class="legend">
+                <span class="legend-dot" style="color:#16a34a;">confirmed proposition overlay</span>
+                <span class="legend-dot" style="color:#eab308;">exploring proposition overlay</span>
+                <span class="legend-dot" style="color:#dc2626;">challenged proposition overlay</span>
+                <span class="legend-dot" style="color:#9ca3af;">weak/merged proposition overlay</span>
+              </div>
+            </div>
+
+            <aside class="graph-side">
+              <div class="graph-rule" id="graphSummary">
+                No evidence yet.
+              </div>
+
+              <div>
+                <h4>Selected Evidence</h4>
+                <div class="mini-list" id="selectedEvidence"></div>
+              </div>
+
+              <div>
+                <h4>Proposition Overlays</h4>
+                <div class="mini-list" id="overlayList"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h2>Report</h2>
+            <label style="display:flex; align-items:center; gap:6px; color:var(--ink); font-size:12px;">
+              <input id="rawToggle" type="checkbox" style="width:auto;" />
+              Raw markdown
+            </label>
+          </div>
+          <div class="status" id="reportStatus" style="margin-top:8px;"></div>
+          <div class="report-wrap" id="reportView"></div>
+        </section>
       </main>
     </div>
 
     <script>
       const state = {
+        cards: [],
         selectedProjectId: null,
         selectedProject: null,
-        cards: [],
         sse: null,
         sseConnected: false,
+        cardsTimer: null,
         pollingTimer: null,
+        refreshDebounce: null,
         graph: {
-          simulation: null,
-          nodePositions: new Map(),
           svg: null,
           gOverlays: null,
           gLinks: null,
           gNodes: null,
+          gEmpty: null,
+          simulation: null,
+          nodePositions: new Map(),
+          selectedNodeId: null,
+          nodeById: new Map(),
+          edges: [],
         },
       };
 
       const els = {
-        health: document.getElementById("health"),
-        projectList: document.getElementById("projectList"),
+        healthPill: document.getElementById("healthPill"),
+        livePill: document.getElementById("livePill"),
         researchQuestion: document.getElementById("researchQuestion"),
         createProjectBtn: document.getElementById("createProjectBtn"),
         createStatus: document.getElementById("createStatus"),
+        projectsList: document.getElementById("projectsList"),
+        projectTitle: document.getElementById("projectTitle"),
+        projectQuestion: document.getElementById("projectQuestion"),
+        projectStatusPill: document.getElementById("projectStatusPill"),
+        controlStatus: document.getElementById("controlStatus"),
         agentId: document.getElementById("agentId"),
         startBtn: document.getElementById("startBtn"),
         finishBtn: document.getElementById("finishBtn"),
-        controlStatus: document.getElementById("controlStatus"),
-        webhookHealth: document.getElementById("webhookHealth"),
-        reloadBtn: document.getElementById("reloadBtn"),
         talkBlock: document.getElementById("talkBlock"),
         talkLink: document.getElementById("talkLink"),
-        qrImg: document.getElementById("qrImg"),
         openTalkBtn: document.getElementById("openTalkBtn"),
-        connectSseBtn: document.getElementById("connectSseBtn"),
-        disconnectSseBtn: document.getElementById("disconnectSseBtn"),
-        stats: document.getElementById("stats"),
-        saturation: document.getElementById("saturation"),
-        modeLabel: document.getElementById("modeLabel"),
+        qrImg: document.getElementById("qrImg"),
+        talkPlaceholder: document.getElementById("talkPlaceholder"),
+        ingestionHint: document.getElementById("ingestionHint"),
+        metrics: document.getElementById("metrics"),
         graph: document.getElementById("graph"),
+        graphSummary: document.getElementById("graphSummary"),
+        selectedEvidence: document.getElementById("selectedEvidence"),
+        overlayList: document.getElementById("overlayList"),
         reportStatus: document.getElementById("reportStatus"),
         reportView: document.getElementById("reportView"),
         rawToggle: document.getElementById("rawToggle"),
-        refreshCardsBtn: document.getElementById("refreshCardsBtn"),
       };
+
+      function escapeHtml(text) {
+        return String(text || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
 
       function setStatus(el, text, isError = false) {
         el.textContent = text;
-        el.classList.toggle("error", isError);
+        el.classList.toggle("error", Boolean(isError));
       }
 
-      function toPct(v) {
-        return `${Math.round((Number(v) || 0) * 100)}%`;
+      function toPct(value) {
+        return `${Math.round((Number(value) || 0) * 100)}%`;
       }
 
       function statusColor(status) {
@@ -451,316 +669,213 @@
         return "#6b7280";
       }
 
+      function statusClass(status) {
+        if (status === "done") return "ok";
+        if (status === "reporting") return "warn";
+        return "";
+      }
+
       async function api(path, options = {}) {
-        const resp = await fetch(path, {
+        const response = await fetch(path, {
           headers: { "Content-Type": "application/json", ...(options.headers || {}) },
           ...options,
         });
-        const text = await resp.text();
-        let body;
+        const text = await response.text();
+        let data;
         try {
-          body = text ? JSON.parse(text) : null;
+          data = text ? JSON.parse(text) : null;
         } catch {
-          body = text;
+          data = text;
         }
-        if (!resp.ok) {
-          throw new Error(`${resp.status} ${resp.statusText}: ${typeof body === "string" ? body : JSON.stringify(body)}`);
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
         }
-        return body;
+        return data;
       }
 
       async function checkHealth() {
         try {
           const result = await api("/health");
-          els.health.textContent = `health: ${result.status}`;
+          els.healthPill.className = "pill ok";
+          els.healthPill.textContent = `health: ${result.status}`;
         } catch {
-          els.health.textContent = "health: down";
+          els.healthPill.className = "pill error";
+          els.healthPill.textContent = "health: down";
         }
       }
 
-      async function refreshCards() {
+      function renderLivePill() {
+        if (state.sseConnected) {
+          els.livePill.className = "pill ok";
+          els.livePill.textContent = "live: streaming";
+          return;
+        }
+        els.livePill.className = "pill warn";
+        els.livePill.textContent = "live: polling fallback";
+      }
+
+      async function refreshCards({ silent = false } = {}) {
         try {
-          state.cards = await api("/api/projects/cards");
+          const cards = await api("/api/projects/cards");
+          state.cards = Array.isArray(cards) ? cards : [];
+
+          if (state.selectedProjectId) {
+            const stillExists = state.cards.some((card) => card.id === state.selectedProjectId);
+            if (!stillExists) {
+              state.selectedProjectId = state.cards[0] ? state.cards[0].id : null;
+            }
+          } else if (state.cards[0]) {
+            state.selectedProjectId = state.cards[0].id;
+          }
+
           renderCards();
-        } catch (err) {
-          setStatus(els.controlStatus, err.message, true);
+
+          if (!silent && state.selectedProjectId && !state.selectedProject) {
+            await selectProject(state.selectedProjectId, { silent: true });
+          }
+        } catch (error) {
+          if (!silent) {
+            setStatus(els.controlStatus, error.message, true);
+          }
         }
       }
 
       function renderCards() {
-        els.projectList.innerHTML = "";
+        els.projectsList.innerHTML = "";
+
         if (!state.cards.length) {
           const empty = document.createElement("div");
           empty.className = "project-item";
-          empty.textContent = "No projects yet";
-          els.projectList.appendChild(empty);
+          empty.innerHTML = '<div class="project-title">No projects yet</div><div class="project-meta">Create the first project from the panel above.</div>';
+          els.projectsList.appendChild(empty);
           return;
         }
 
-        if (!state.selectedProjectId) {
-          state.selectedProjectId = state.cards[0].id;
-        }
-
         for (const card of state.cards) {
-          const el = document.createElement("div");
-          el.className = `project-item${card.id === state.selectedProjectId ? " active" : ""}`;
-          el.innerHTML = `
-            <h4>${card.id}</h4>
+          const item = document.createElement("div");
+          item.className = `project-item${card.id === state.selectedProjectId ? " active" : ""}`;
+          item.innerHTML = `
+            <div class="project-title">${escapeHtml(card.id)}</div>
             <div class="project-meta">
-              <div style="color:${statusColor(card.status)};font-weight:600;">${card.status}${card.report_stale ? " • stale report" : ""}</div>
-              <div>${card.interviews_count} interviews • ${card.evidence_count} evidence</div>
-              <div>conv ${toPct(card.convergence_score)} • novelty ${toPct(card.novelty_rate)}</div>
+              <div><strong style="color:${statusColor(card.status)};">${escapeHtml(card.status)}</strong>${card.report_stale ? " • stale report" : ""}</div>
+              <div>${card.interviews_count} interview(s), ${card.evidence_count} evidence</div>
+              <div>convergence ${toPct(card.convergence_score)} • novelty ${toPct(card.novelty_rate)}</div>
             </div>
           `;
-          el.onclick = async () => {
-            state.selectedProjectId = card.id;
-            renderCards();
-            await loadProject(card.id);
-            connectSSE();
-          };
-          els.projectList.appendChild(el);
+          item.onclick = () => selectProject(card.id);
+          els.projectsList.appendChild(item);
         }
       }
 
-      async function loadProject(projectId, silent = false) {
+      async function selectProject(projectId, { silent = false } = {}) {
+        state.selectedProjectId = projectId;
+        renderCards();
+        await loadProject(projectId, { silent });
+        connectSSE(projectId);
+      }
+
+      async function loadProject(projectId, { silent = false } = {}) {
         if (!projectId) return;
         try {
-          state.selectedProject = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+          const project = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+          state.selectedProject = project;
+          renderProject(project);
           if (!silent) {
-            setStatus(els.controlStatus, `Loaded ${projectId}`);
+            setStatus(els.controlStatus, `Loaded project ${project.id}`);
           }
-          renderProject(state.selectedProject);
-        } catch (err) {
-          setStatus(els.controlStatus, err.message, true);
+        } catch (error) {
+          setStatus(els.controlStatus, error.message, true);
         }
       }
 
       function renderProject(project) {
-        renderWebhookHealth(project);
-        renderStats(project);
-        renderSaturation(project);
-        renderKnowledgeGraph(project);
+        els.projectTitle.textContent = project.id;
+        els.projectQuestion.textContent = project.research_question || "";
+        els.projectStatusPill.textContent = `status: ${project.status}`;
+        els.projectStatusPill.className = `pill ${statusClass(project.status)}`.trim();
+
+        renderIngestionHint(project);
         renderTalk(project);
+        renderMetrics(project);
+        renderGraph(project);
         renderReport(project);
       }
 
-      function renderWebhookHealth(project) {
-        const interviews = project.interview_store || [];
-        const evidence = project.evidence_store || [];
-        const hasData = interviews.length > 0 && evidence.length > 0;
-        const lastInterview = interviews.length ? interviews[interviews.length - 1] : null;
-        const lastAt = lastInterview && lastInterview.created_at ? String(lastInterview.created_at) : null;
+      function renderIngestionHint(project) {
+        const interviewsCount = (project.interview_store || []).length;
+        const evidenceCount = (project.evidence_store || []).length;
+        const hasData = interviewsCount > 0 && evidenceCount > 0;
 
         if (hasData) {
-          els.webhookHealth.className = "alert ok";
-          els.webhookHealth.textContent =
-            `Webhook ingestion OK. Received ${interviews.length} interview(s) and ${evidence.length} evidence item(s).` +
-            (lastAt ? ` Last transcript: ${lastAt}.` : "");
+          els.ingestionHint.className = "danger-box";
+          els.ingestionHint.style.borderColor = "#86efac";
+          els.ingestionHint.style.background = "#f0fdf4";
+          els.ingestionHint.style.color = "#166534";
+          els.ingestionHint.textContent = `Webhook ingestion OK: ${interviewsCount} interview(s), ${evidenceCount} evidence item(s).`;
           els.finishBtn.disabled = false;
           return;
         }
 
-        els.webhookHealth.className = "alert warn";
-        els.webhookHealth.textContent =
-          "No grounded transcript data yet. Finish will generate a 'Report Not Ready' fallback. " +
-          "Check ElevenLabs post-call webhook delivery and complete a call to the end_call stage.";
+        els.ingestionHint.className = "danger-box";
+        els.ingestionHint.style.borderColor = "#fca5a5";
+        els.ingestionHint.style.background = "#fef2f2";
+        els.ingestionHint.style.color = "#7f1d1d";
+        els.ingestionHint.textContent = "No interview transcript ingested yet. Complete one call and wait for webhook delivery before finishing.";
         els.finishBtn.disabled = true;
       }
 
-      function renderStats(project) {
-        const activeProps = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
-        const metrics = [
-          ["Participants", String((project.interview_store || []).length)],
-          ["Evidence", String((project.evidence_store || []).length)],
-          ["Active propositions", String(activeProps)],
-          ["Convergence", toPct(project.metrics?.convergence_score)],
-          ["Novelty", toPct(project.metrics?.novelty_rate)],
-        ];
-        els.stats.innerHTML = metrics
-          .map(([k, v]) => `<div class="metric"><div class="k">${k}</div><div class="v">${v}</div></div>`)
-          .join("");
-      }
-
       function renderTalk(project) {
-        const talk = project.talk_to_link;
+        const talk = String(project.talk_to_link || "").trim();
         if (!talk) {
           els.talkBlock.style.display = "none";
+          els.talkPlaceholder.style.display = "block";
+          els.talkLink.textContent = "";
+          els.qrImg.removeAttribute("src");
           return;
         }
+
         els.talkBlock.style.display = "grid";
+        els.talkPlaceholder.style.display = "none";
         els.talkLink.textContent = talk;
-        els.openTalkBtn.onclick = () => window.open(talk, "_blank");
+        els.openTalkBtn.onclick = () => window.open(talk, "_blank", "noopener,noreferrer");
         els.qrImg.src = `/api/projects/${encodeURIComponent(project.id)}/qrcode?ts=${Date.now()}`;
       }
 
-      function parseMarkdownSections(markdown) {
-        const lines = String(markdown || "").split("\n");
-        const sections = [];
-        let current = { title: "Overview", body: [] };
+      function renderMetrics(project) {
+        const activePropositions = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
 
-        for (const line of lines) {
-          const h2 = line.match(/^##\s+(.+)/);
-          const h3 = line.match(/^###\s+(.+)/);
-          if (h2 || h3) {
-            if (current.body.length) {
-              sections.push({ title: current.title, body: current.body.join("\n").trim() });
-            }
-            current = { title: (h2 || h3)[1].trim(), body: [] };
-          } else {
-            current.body.push(line);
-          }
-        }
-        if (current.body.length) {
-          sections.push({ title: current.title, body: current.body.join("\n").trim() });
-        }
-        return sections.filter((s) => s.body);
-      }
+        const data = [
+          ["Participants", String((project.interview_store || []).length)],
+          ["Evidence", String((project.evidence_store || []).length)],
+          ["Active propositions", String(activePropositions)],
+          ["Convergence", toPct(project.metrics?.convergence_score)],
+          ["Novelty", toPct(project.metrics?.novelty_rate)],
+          ["Mode", project.metrics?.mode || "divergent"],
+        ];
 
-      function renderReport(project) {
-        if (!project.report_markdown) {
-          const suffix = project.report_stale ? " (stale)" : "";
-          setStatus(els.reportStatus, `No report yet. Status: ${project.status}${suffix}`);
-          els.reportView.innerHTML = "";
-          return;
-        }
-
-        const staleText = project.report_stale ? " • stale" : "";
-        setStatus(
-          els.reportStatus,
-          `Report generated: ${project.report_generated_at || "unknown"}${staleText}`
-        );
-
-        if (els.rawToggle.checked) {
-          els.reportView.innerHTML = `<pre class="mono">${escapeHtml(project.report_markdown)}</pre>`;
-          return;
-        }
-
-        const sections = parseMarkdownSections(project.report_markdown);
-        els.reportView.innerHTML = sections
-          .map(
-            (s, idx) => `
-              <details ${idx === 0 ? "open" : ""}>
-                <summary>${escapeHtml(s.title)}</summary>
-                <div class="mono">${escapeHtml(s.body)}</div>
-              </details>
-            `
-          )
+        els.metrics.innerHTML = data
+          .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`)
           .join("");
       }
 
-      function renderSaturation(project) {
-        const svg = d3.select(els.saturation);
-        svg.selectAll("*").remove();
-
-        const width = els.saturation.clientWidth || 600;
-        const height = els.saturation.clientHeight || 170;
-        svg.attr("viewBox", `0 0 ${width} ${height}`);
-
-        const scripts = project.script_versions || [];
-        const points = scripts.length
-          ? scripts.map((s, idx) => ({
-              i: idx + 1,
-              conv: Number(s.convergence_score || 0),
-              nov: Number(s.novelty_rate || 0),
-            }))
-          : [{ i: 1, conv: Number(project.metrics?.convergence_score || 0), nov: Number(project.metrics?.novelty_rate || 0) }];
-
-        const margin = { top: 14, right: 20, bottom: 24, left: 30 };
-        const x = d3
-          .scaleLinear()
-          .domain([1, Math.max(2, d3.max(points, (d) => d.i) || 2)])
-          .range([margin.left, width - margin.right]);
-        const y = d3.scaleLinear().domain([0, 1]).range([height - margin.bottom, margin.top]);
-
-        const lineConv = d3
-          .line()
-          .x((d) => x(d.i))
-          .y((d) => y(d.conv));
-        const lineNov = d3
-          .line()
-          .x((d) => x(d.i))
-          .y((d) => y(d.nov));
-
-        svg
-          .append("path")
-          .datum(points)
-          .attr("fill", "none")
-          .attr("stroke", "#0f766e")
-          .attr("stroke-width", 2)
-          .attr("d", lineConv);
-
-        svg
-          .append("path")
-          .datum(points)
-          .attr("fill", "none")
-          .attr("stroke", "#b45309")
-          .attr("stroke-width", 2)
-          .attr("d", lineNov);
-
-        svg
-          .append("line")
-          .attr("x1", margin.left)
-          .attr("x2", width - margin.right)
-          .attr("y1", y(0.6))
-          .attr("y2", y(0.6))
-          .attr("stroke", "#9ca3af")
-          .attr("stroke-dasharray", "3,3");
-
-        svg
-          .append("line")
-          .attr("x1", margin.left)
-          .attr("x2", width - margin.right)
-          .attr("y1", y(0.15))
-          .attr("y2", y(0.15))
-          .attr("stroke", "#d6d3d1")
-          .attr("stroke-dasharray", "3,3");
-
-        svg
-          .append("g")
-          .attr("transform", `translate(0,${height - margin.bottom})`)
-          .call(d3.axisBottom(x).ticks(Math.min(6, points.length + 1)).tickFormat((d) => `v${d}`));
-
-        svg
-          .append("g")
-          .attr("transform", `translate(${margin.left},0)`)
-          .call(d3.axisLeft(y).ticks(5).tickFormat((d) => `${Math.round(d * 100)}%`));
-
-        els.modeLabel.innerHTML = `
-          <span class="dot" style="color:#0f766e;">convergence</span>
-          <span class="dot" style="color:#b45309;">novelty</span>
-          <span>mode: <strong>${project.metrics?.mode || "divergent"}</strong></span>
-        `;
-      }
-
-      function ensureGraphInit() {
-        if (state.graph.svg) return;
-        const svg = d3.select(els.graph);
-        const width = els.graph.clientWidth || 900;
-        const height = els.graph.clientHeight || 460;
-        svg.attr("viewBox", `0 0 ${width} ${height}`);
-
-        state.graph.svg = svg;
-        state.graph.gOverlays = svg.append("g").attr("class", "overlays");
-        state.graph.gLinks = svg.append("g").attr("class", "links");
-        state.graph.gNodes = svg.append("g").attr("class", "nodes");
-      }
-
-      function tokenize(str) {
-        return new Set(
-          String(str || "")
-            .toLowerCase()
-            .split(/[^a-z0-9]+/)
-            .filter((x) => x.length > 2)
-        );
+      function tokenize(value) {
+        const text = String(value || "").toLowerCase();
+        let matches = [];
+        try {
+          matches = text.match(/[\p{L}\p{N}]{2,}/gu) || [];
+        } catch {
+          matches = text.split(/[^a-z0-9а-яё]+/).filter((x) => x.length > 1);
+        }
+        return new Set(matches);
       }
 
       function jaccard(setA, setB) {
         if (!setA.size && !setB.size) return 0;
-        let inter = 0;
+        let intersection = 0;
         for (const item of setA) {
-          if (setB.has(item)) inter += 1;
+          if (setB.has(item)) intersection += 1;
         }
-        return inter / (setA.size + setB.size - inter || 1);
+        return intersection / ((setA.size + setB.size - intersection) || 1);
       }
 
       function propositionColor(prop) {
@@ -770,56 +885,50 @@
         return "#16a34a";
       }
 
-      function renderKnowledgeGraph(project) {
-        ensureGraphInit();
-        const svg = state.graph.svg;
-        const gOverlays = state.graph.gOverlays;
-        const gLinks = state.graph.gLinks;
-        const gNodes = state.graph.gNodes;
+      function ensureGraphInitialized() {
+        if (state.graph.svg) return;
 
-        const width = els.graph.clientWidth || 900;
-        const height = els.graph.clientHeight || 460;
-        svg.attr("viewBox", `0 0 ${width} ${height}`);
+        const svg = d3.select(els.graph);
+        state.graph.svg = svg;
+        state.graph.gOverlays = svg.append("g").attr("class", "overlays");
+        state.graph.gLinks = svg.append("g").attr("class", "links");
+        state.graph.gNodes = svg.append("g").attr("class", "nodes");
+        state.graph.gEmpty = svg.append("g").attr("class", "empty");
+      }
 
-        const evidence = (project.evidence_store || []).map((e) => ({ ...e }));
-        if (!evidence.length) {
-          gLinks.selectAll("*").remove();
-          gNodes.selectAll("*").remove();
-          gOverlays.selectAll("*").remove();
-          gNodes
-            .append("text")
-            .attr("x", width / 2)
-            .attr("y", height / 2)
-            .attr("text-anchor", "middle")
-            .attr("fill", "#6b7280")
-            .text("No evidence yet. Start interviews to populate the graph.");
-          return;
-        }
+      function buildGraphData(project, width, height) {
+        const evidence = (project.evidence_store || []).map((item) => ({ ...item }));
+        const propositions = project.proposition_store || [];
+        const propositionMap = new Map(propositions.map((p) => [p.id, p]));
 
-        const propositionMap = new Map((project.proposition_store || []).map((p) => [p.id, p]));
         const evidenceToProps = new Map(evidence.map((e) => [e.id, new Set()]));
-        for (const p of project.proposition_store || []) {
-          for (const id of [...(p.supporting_evidence || []), ...(p.contradicting_evidence || [])]) {
-            if (evidenceToProps.has(id)) evidenceToProps.get(id).add(p.id);
+        for (const prop of propositions) {
+          for (const id of [...(prop.supporting_evidence || []), ...(prop.contradicting_evidence || [])]) {
+            if (evidenceToProps.has(id)) {
+              evidenceToProps.get(id).add(prop.id);
+            }
           }
         }
 
-        const nodes = evidence.map((e) => {
-          const prev = state.graph.nodePositions.get(e.id);
-          const intIdx = Number(String(e.interview_id || "").replace(/\D/g, "")) || 1;
+        const nodes = evidence.map((evidenceItem) => {
+          const existing = state.graph.nodePositions.get(evidenceItem.id);
+          const interviewIndex = Number(String(evidenceItem.interview_id || "").replace(/\D/g, "")) || 1;
           return {
-            id: e.id,
-            interviewId: e.interview_id,
-            quote: e.quote,
-            tags: new Set((e.tags || []).map((t) => String(t).toLowerCase())),
-            fmo: tokenize(`${e.factor} ${e.mechanism} ${e.outcome}`),
-            propositions: evidenceToProps.get(e.id) || new Set(),
-            x: prev ? prev.x : width / 2 + (Math.random() - 0.5) * 80,
-            y: prev ? prev.y : height / 2 + (Math.random() - 0.5) * 80,
-            vx: prev ? prev.vx : 0,
-            vy: prev ? prev.vy : 0,
-            interviewColor: d3.interpolateTurbo((intIdx % 10) / 10),
+            id: evidenceItem.id,
+            interviewId: evidenceItem.interview_id,
+            quote: evidenceItem.quote,
+            factor: evidenceItem.factor,
+            mechanism: evidenceItem.mechanism,
+            outcome: evidenceItem.outcome,
+            tags: new Set((evidenceItem.tags || []).map((tag) => String(tag).toLowerCase())),
+            fmoTokens: tokenize(`${evidenceItem.factor} ${evidenceItem.mechanism} ${evidenceItem.outcome}`),
+            propositionIds: evidenceToProps.get(evidenceItem.id) || new Set(),
+            interviewColor: d3.interpolateTurbo((interviewIndex % 10) / 10),
             degree: 0,
+            x: existing ? existing.x : width / 2 + (Math.random() - 0.5) * 80,
+            y: existing ? existing.y : height / 2 + (Math.random() - 0.5) * 80,
+            vx: existing ? existing.vx : 0,
+            vy: existing ? existing.vy : 0,
           };
         });
 
@@ -828,26 +937,83 @@
           for (let j = i + 1; j < nodes.length; j += 1) {
             const a = nodes[i];
             const b = nodes[j];
-
-            const propScore = jaccard(a.propositions, b.propositions);
-            const tagScore = jaccard(a.tags, b.tags);
-            const fmoScore = jaccard(a.fmo, b.fmo);
-            const score = 0.45 * propScore + 0.35 * tagScore + 0.2 * fmoScore;
+            const propositionOverlap = jaccard(a.propositionIds, b.propositionIds);
+            const tagOverlap = jaccard(a.tags, b.tags);
+            const fmoOverlap = jaccard(a.fmoTokens, b.fmoTokens);
+            const score = 0.45 * propositionOverlap + 0.35 * tagOverlap + 0.2 * fmoOverlap;
             if (score >= 0.7) {
-              edges.push({ source: a.id, target: b.id, score });
+              edges.push({
+                source: a.id,
+                target: b.id,
+                score,
+                propositionOverlap,
+                tagOverlap,
+                fmoOverlap,
+              });
               a.degree += 1;
               b.degree += 1;
             }
           }
         }
 
-        const size = d3
+        const radiusScale = d3
           .scaleLinear()
-          .domain([0, Math.max(1, d3.max(nodes, (d) => d.degree) || 1)])
-          .range([5, 13]);
-        nodes.forEach((n) => {
-          n.r = size(n.degree);
-        });
+          .domain([0, Math.max(1, d3.max(nodes, (node) => node.degree) || 1)])
+          .range([8, 16]);
+
+        for (const node of nodes) {
+          node.r = radiusScale(node.degree);
+        }
+
+        return { nodes, edges, propositionMap };
+      }
+
+      function renderGraph(project) {
+        ensureGraphInitialized();
+
+        const svg = state.graph.svg;
+        const gOverlays = state.graph.gOverlays;
+        const gLinks = state.graph.gLinks;
+        const gNodes = state.graph.gNodes;
+        const gEmpty = state.graph.gEmpty;
+
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 560;
+        svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+        const { nodes, edges, propositionMap } = buildGraphData(project, width, height);
+        state.graph.nodeById = new Map(nodes.map((node) => [node.id, node]));
+        state.graph.edges = edges;
+
+        if (!nodes.length) {
+          if (state.graph.simulation) {
+            state.graph.simulation.stop();
+          }
+          gOverlays.selectAll("*").remove();
+          gLinks.selectAll("*").remove();
+          gNodes.selectAll("*").remove();
+          gEmpty.selectAll("*").remove();
+          gEmpty
+            .append("text")
+            .attr("x", width / 2)
+            .attr("y", height / 2)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#6b7280")
+            .attr("font-size", "14")
+            .text("No evidence yet. Complete interviews to populate this map.");
+
+          state.graph.selectedNodeId = null;
+          renderSelectedEvidence(null, project, propositionMap);
+          renderOverlayList(project);
+          els.graphSummary.textContent = "No evidence yet. Node and edge metrics will appear after first webhook ingestion.";
+          return;
+        }
+
+        gEmpty.selectAll("*").remove();
+
+        if (!state.graph.selectedNodeId || !state.graph.nodeById.has(state.graph.selectedNodeId)) {
+          state.graph.selectedNodeId = nodes[0].id;
+        }
 
         if (!state.graph.simulation) {
           state.graph.simulation = d3.forceSimulation(nodes);
@@ -856,14 +1022,14 @@
         const simulation = state.graph.simulation;
         simulation
           .nodes(nodes)
-          .force("link", d3.forceLink(edges).id((d) => d.id).distance(88).strength(0.35))
-          .force("charge", d3.forceManyBody().strength(-125))
+          .force("link", d3.forceLink(edges).id((d) => d.id).distance(95).strength(0.36))
+          .force("charge", d3.forceManyBody().strength(-180))
           .force("center", d3.forceCenter(width / 2, height / 2))
-          .force("collide", d3.forceCollide().radius((d) => d.r + 4))
+          .force("collide", d3.forceCollide().radius((d) => d.r + 8))
           .alpha(0.9)
           .restart();
 
-        const link = gLinks
+        const links = gLinks
           .selectAll("line")
           .data(edges, (d) => `${d.source.id || d.source}-${d.target.id || d.target}`)
           .join(
@@ -871,128 +1037,347 @@
               enter
                 .append("line")
                 .attr("stroke", "#94a3b8")
-                .attr("stroke-opacity", 0.35)
-                .attr("stroke-width", (d) => 1 + d.score * 1.4)
-                .attr("stroke-dasharray", "6,6")
-                .attr("stroke-dashoffset", 30)
-                .call((sel) => sel.transition().duration(500).attr("stroke-dashoffset", 0)),
+                .attr("stroke-opacity", 0.34)
+                .attr("stroke-width", (d) => 1 + d.score * 2.1)
+                .attr("stroke-dasharray", "5,5")
+                .attr("stroke-dashoffset", 40)
+                .call((selection) => selection.transition().duration(500).attr("stroke-dashoffset", 0)),
             (update) => update,
             (exit) => exit.remove()
           );
 
-        const node = gNodes
-          .selectAll("circle")
+        links.selectAll("title").remove();
+        links
+          .append("title")
+          .text((d) => `score ${d.score.toFixed(2)}\nprop ${d.propositionOverlap.toFixed(2)}\ntag ${d.tagOverlap.toFixed(2)}\nfmo ${d.fmoOverlap.toFixed(2)}`);
+
+        const nodeGroups = gNodes
+          .selectAll("g.node")
           .data(nodes, (d) => d.id)
           .join(
-            (enter) =>
-              enter
-                .append("circle")
-                .attr("r", (d) => d.r)
-                .attr("fill", (d) => d.interviewColor)
-                .attr("stroke", "#fff")
-                .attr("stroke-width", 1.2)
+            (enter) => {
+              const group = enter
+                .append("g")
+                .attr("class", "node")
+                .style("cursor", "pointer")
                 .attr("opacity", 0)
-                .call((sel) => sel.transition().duration(500).attr("opacity", 1)),
+                .call((selection) => selection.transition().duration(450).attr("opacity", 1));
+
+              group
+                .append("circle")
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 1.3)
+                .attr("fill", (d) => d.interviewColor)
+                .attr("r", (d) => d.r);
+
+              group
+                .append("text")
+                .attr("text-anchor", "middle")
+                .attr("dy", 4)
+                .attr("font-size", 10)
+                .attr("font-weight", 700)
+                .attr("pointer-events", "none")
+                .attr("fill", "#111827")
+                .text((d) => d.id);
+
+              return group;
+            },
             (update) => update,
             (exit) => exit.remove()
           );
 
-        node.append("title").text((d) => `${d.id}\n${d.quote}`);
+        nodeGroups
+          .select("circle")
+          .attr("fill", (d) => d.interviewColor)
+          .attr("r", (d) => d.r)
+          .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#0f172a" : "#ffffff"))
+          .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.3 : 1.3));
 
-        const overlayData = (project.proposition_store || []).map((p) => ({
-          proposition: p,
-          evidenceIds: p.supporting_evidence || [],
+        nodeGroups.select("text").text((d) => d.id);
+
+        nodeGroups.selectAll("title").remove();
+        nodeGroups
+          .append("title")
+          .text((d) => `${d.id}\n${d.factor} -> ${d.mechanism} -> ${d.outcome}\n${d.quote}`);
+
+        const drag = d3
+          .drag()
+          .on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.25).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on("drag", (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          });
+
+        nodeGroups.call(drag).on("click", (_, node) => {
+          state.graph.selectedNodeId = node.id;
+          nodeGroups
+            .select("circle")
+            .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#0f172a" : "#ffffff"))
+            .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.3 : 1.3));
+          renderSelectedEvidence(node, project, propositionMap);
+        });
+
+        const overlayData = (project.proposition_store || []).map((proposition) => ({
+          proposition,
+          evidenceIds: proposition.supporting_evidence || [],
         }));
 
         const overlays = gOverlays
           .selectAll("path")
-          .data(overlayData, (d) => d.proposition.id)
+          .data(overlayData, (item) => item.proposition.id)
           .join(
             (enter) =>
               enter
                 .append("path")
-                .attr("fill", (d) => propositionColor(d.proposition))
-                .attr("fill-opacity", 0.08)
-                .attr("stroke", (d) => propositionColor(d.proposition))
-                .attr("stroke-opacity", 0.35)
+                .attr("fill", (item) => propositionColor(item.proposition))
+                .attr("fill-opacity", 0.09)
+                .attr("stroke", (item) => propositionColor(item.proposition))
+                .attr("stroke-opacity", 0.34)
                 .attr("stroke-width", 1.2),
             (update) => update,
             (exit) => exit.remove()
           );
 
         simulation.on("tick", () => {
-          link
+          links
             .attr("x1", (d) => d.source.x)
             .attr("y1", (d) => d.source.y)
             .attr("x2", (d) => d.target.x)
             .attr("y2", (d) => d.target.y);
 
-          node.attr("cx", (d) => d.x).attr("cy", (d) => d.y).attr("r", (d) => d.r);
+          nodeGroups.attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-          const nodeById = new Map(nodes.map((n) => [n.id, n]));
-          overlays.attr("d", (d) => {
-            const points = d.evidenceIds
+          const nodeById = new Map(nodes.map((node) => [node.id, node]));
+          overlays.attr("d", (item) => {
+            const points = item.evidenceIds
               .map((id) => nodeById.get(id))
               .filter(Boolean)
-              .map((n) => [n.x, n.y]);
+              .map((node) => [node.x, node.y]);
 
             if (!points.length) return "";
             if (points.length === 1) {
               const [x, y] = points[0];
-              const r = 18;
-              return `M ${x - r},${y} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
+              const radius = 21;
+              return `M ${x - radius},${y} a ${radius},${radius} 0 1,0 ${radius * 2},0 a ${radius},${radius} 0 1,0 ${-radius * 2},0`;
             }
             if (points.length === 2) {
               const cx = (points[0][0] + points[1][0]) / 2;
               const cy = (points[0][1] + points[1][1]) / 2;
               const dx = points[0][0] - points[1][0];
               const dy = points[0][1] - points[1][1];
-              const r = Math.max(16, Math.sqrt(dx * dx + dy * dy) / 2 + 8);
-              return `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
+              const radius = Math.max(18, Math.sqrt(dx * dx + dy * dy) / 2 + 10);
+              return `M ${cx - radius},${cy} a ${radius},${radius} 0 1,0 ${radius * 2},0 a ${radius},${radius} 0 1,0 ${-radius * 2},0`;
             }
             const hull = d3.polygonHull(points);
             if (!hull) return "";
-            return `M ${hull.map((p) => `${p[0]},${p[1]}`).join(" L ")} Z`;
+            return `M ${hull.map((point) => `${point[0]},${point[1]}`).join(" L ")} Z`;
           });
 
-          for (const n of nodes) {
-            state.graph.nodePositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy });
+          for (const node of nodes) {
+            state.graph.nodePositions.set(node.id, {
+              x: node.x,
+              y: node.y,
+              vx: node.vx,
+              vy: node.vy,
+            });
           }
         });
+
+        const selectedNode = state.graph.nodeById.get(state.graph.selectedNodeId) || null;
+        renderSelectedEvidence(selectedNode, project, propositionMap);
+        renderOverlayList(project);
+        els.graphSummary.textContent = `Evidence nodes: ${nodes.length}. Similarity edges: ${edges.length}. Selected threshold: 0.70.`;
       }
 
-      function escapeHtml(text) {
-        return String(text)
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;");
+      function renderSelectedEvidence(node, project, propositionMap) {
+        if (!node) {
+          els.selectedEvidence.innerHTML = '<div class="mini-card">Click a node to inspect evidence details.</div>';
+          return;
+        }
+
+        const supportingProps = [];
+        for (const propositionId of node.propositionIds || []) {
+          const proposition = propositionMap.get(propositionId);
+          if (proposition) supportingProps.push(proposition);
+        }
+
+        const connections = state.graph.edges
+          .filter((edge) => {
+            const sourceId = edge.source.id || edge.source;
+            const targetId = edge.target.id || edge.target;
+            return sourceId === node.id || targetId === node.id;
+          })
+          .map((edge) => {
+            const sourceId = edge.source.id || edge.source;
+            const targetId = edge.target.id || edge.target;
+            const peerId = sourceId === node.id ? targetId : sourceId;
+            return { peerId, score: edge.score };
+          })
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 4);
+
+        const propsHtml = supportingProps.length
+          ? supportingProps
+              .map((prop) => `${escapeHtml(prop.id)} (${escapeHtml(prop.status)}, conf ${toPct(prop.confidence)})`)
+              .join("<br />")
+          : "No linked propositions";
+
+        const connectionsHtml = connections.length
+          ? connections
+              .map((item) => `${escapeHtml(item.peerId)} (score ${item.score.toFixed(2)})`)
+              .join("<br />")
+          : "No strong edges";
+
+        const tagsText = Array.from(node.tags || []).join(", ");
+
+        els.selectedEvidence.innerHTML = `
+          <div class="mini-card">
+            <strong>${escapeHtml(node.id)}</strong><br />
+            interview: ${escapeHtml(node.interviewId || "unknown")}<br />
+            degree: ${node.degree}
+          </div>
+          <div class="mini-card">
+            <strong>Factor -> Mechanism -> Outcome</strong><br />
+            ${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}
+          </div>
+          <div class="mini-card">
+            <strong>Quote</strong><br />
+            ${escapeHtml(node.quote || "")}
+          </div>
+          <div class="mini-card">
+            <strong>Tags</strong><br />
+            ${escapeHtml(tagsText || "none")}
+          </div>
+          <div class="mini-card">
+            <strong>Linked propositions</strong><br />
+            ${propsHtml}
+          </div>
+          <div class="mini-card">
+            <strong>Strongest connections</strong><br />
+            ${connectionsHtml}
+          </div>
+        `;
       }
 
-      let reloadTimer = null;
-      function scheduleReload() {
+      function renderOverlayList(project) {
+        const propositions = project.proposition_store || [];
+        if (!propositions.length) {
+          els.overlayList.innerHTML = '<div class="mini-card">No propositions yet.</div>';
+          return;
+        }
+
+        els.overlayList.innerHTML = propositions
+          .slice(0, 12)
+          .map((prop) => {
+            const color = propositionColor(prop);
+            return `
+              <div class="mini-card" style="border-left:4px solid ${color};">
+                <strong>${escapeHtml(prop.id)}</strong> • ${escapeHtml(prop.status)} • conf ${toPct(prop.confidence)}<br />
+                <span class="muted">${escapeHtml(prop.factor || "")}</span><br />
+                support ${prop.supporting_evidence?.length || 0} / contradict ${prop.contradicting_evidence?.length || 0}
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function parseMarkdownSections(markdown) {
+        const lines = String(markdown || "").split("\n");
+        const sections = [];
+        let current = { title: "Overview", body: [] };
+
+        for (const line of lines) {
+          const heading2 = line.match(/^##\s+(.+)/);
+          const heading3 = line.match(/^###\s+(.+)/);
+          if (heading2 || heading3) {
+            if (current.body.length) {
+              sections.push({ title: current.title, body: current.body.join("\n").trim() });
+            }
+            current = { title: (heading2 || heading3)[1].trim(), body: [] };
+          } else {
+            current.body.push(line);
+          }
+        }
+
+        if (current.body.length) {
+          sections.push({ title: current.title, body: current.body.join("\n").trim() });
+        }
+
+        return sections.filter((section) => section.body);
+      }
+
+      function renderReport(project) {
+        if (!project.report_markdown) {
+          const staleText = project.report_stale ? " (stale)" : "";
+          setStatus(els.reportStatus, `No report yet. Project status: ${project.status}${staleText}`);
+          els.reportView.innerHTML = "";
+          return;
+        }
+
+        const generatedAt = project.report_generated_at || "unknown";
+        const staleText = project.report_stale ? " • stale" : "";
+        setStatus(els.reportStatus, `Report generated: ${generatedAt}${staleText}`);
+
+        if (els.rawToggle.checked) {
+          els.reportView.innerHTML = `<pre class="mono">${escapeHtml(project.report_markdown)}</pre>`;
+          return;
+        }
+
+        const sections = parseMarkdownSections(project.report_markdown);
+        els.reportView.innerHTML = sections
+          .map(
+            (section, index) => `
+              <details ${index === 0 ? "open" : ""}>
+                <summary>${escapeHtml(section.title)}</summary>
+                <div class="mono" style="white-space:pre-wrap; margin-top:8px; line-height:1.5;">${escapeHtml(section.body)}</div>
+              </details>
+            `
+          )
+          .join("");
+      }
+
+      function scheduleProjectRefresh() {
         if (!state.selectedProjectId) return;
-        if (reloadTimer) clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(async () => {
-          await loadProject(state.selectedProjectId, true);
-          await refreshCards();
-        }, 300);
+        if (state.refreshDebounce) clearTimeout(state.refreshDebounce);
+        state.refreshDebounce = setTimeout(async () => {
+          await loadProject(state.selectedProjectId, { silent: true });
+          await refreshCards({ silent: true });
+        }, 350);
       }
 
-      function connectSSE() {
-        if (!state.selectedProjectId) return;
+      function disconnectSSE() {
+        if (state.sse) {
+          state.sse.close();
+        }
+        state.sse = null;
+        state.sseConnected = false;
+        renderLivePill();
+      }
+
+      function connectSSE(projectId) {
+        if (!projectId) return;
         disconnectSSE();
 
-        const projectId = state.selectedProjectId;
         const source = new EventSource(`/api/projects/${encodeURIComponent(projectId)}/stream`);
         state.sse = source;
 
         source.onopen = () => {
           state.sseConnected = true;
-          setStatus(els.controlStatus, `SSE connected for ${projectId}`);
+          renderLivePill();
         };
+
         source.onerror = () => {
           state.sseConnected = false;
-          setStatus(els.controlStatus, "SSE unavailable, polling every 10s", true);
+          renderLivePill();
         };
 
         [
@@ -1005,125 +1390,115 @@
           "report_ready",
           "report_stale",
         ].forEach((eventName) => {
-          source.addEventListener(eventName, () => scheduleReload());
+          source.addEventListener(eventName, () => scheduleProjectRefresh());
         });
       }
 
-      function disconnectSSE() {
-        if (state.sse) {
-          state.sse.close();
-        }
-        state.sse = null;
-        state.sseConnected = false;
-      }
-
-      function ensurePolling() {
+      function ensurePollingFallback() {
         if (state.pollingTimer) return;
         state.pollingTimer = setInterval(async () => {
           if (!state.selectedProjectId) return;
           if (state.sseConnected) return;
-          await loadProject(state.selectedProjectId, true);
-          await refreshCards();
+          await loadProject(state.selectedProjectId, { silent: true });
+          await refreshCards({ silent: true });
         }, 10000);
       }
 
-      els.createProjectBtn.onclick = async () => {
-        const question = els.researchQuestion.value.trim();
-        if (!question) {
-          setStatus(els.createStatus, "Research question is required", true);
+      function ensureCardsRefreshLoop() {
+        if (state.cardsTimer) return;
+        state.cardsTimer = setInterval(async () => {
+          await refreshCards({ silent: true });
+        }, 15000);
+      }
+
+      async function createProject() {
+        const researchQuestion = els.researchQuestion.value.trim();
+        if (!researchQuestion) {
+          setStatus(els.createStatus, "Research question is required.", true);
           return;
         }
+
         try {
           const result = await api("/api/projects", {
             method: "POST",
-            body: JSON.stringify({ research_question: question }),
+            body: JSON.stringify({ research_question: researchQuestion }),
           });
-          setStatus(els.createStatus, `Created project: ${result.project_id}`);
-          state.selectedProjectId = result.project_id;
-          await refreshCards();
-          await loadProject(result.project_id);
-          connectSSE();
-        } catch (err) {
-          setStatus(els.createStatus, err.message, true);
+          setStatus(els.createStatus, `Created ${result.project_id}`);
+          await refreshCards({ silent: true });
+          await selectProject(result.project_id, { silent: true });
+        } catch (error) {
+          setStatus(els.createStatus, error.message, true);
         }
-      };
+      }
 
-      els.startBtn.onclick = async () => {
+      async function startResearch() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select/create a project first", true);
+          setStatus(els.controlStatus, "Select or create a project first.", true);
           return;
         }
+
         try {
           const agentId = els.agentId.value.trim();
           const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
-          const result = await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
+          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setStatus(els.controlStatus, `Started project ${result.project_id}`);
-          await loadProject(state.selectedProjectId, true);
-          await refreshCards();
-          connectSSE();
-        } catch (err) {
-          setStatus(els.controlStatus, err.message, true);
+          setStatus(els.controlStatus, "Project started. Interview link is ready.");
+          await loadProject(state.selectedProjectId, { silent: true });
+          await refreshCards({ silent: true });
+          connectSSE(state.selectedProjectId);
+        } catch (error) {
+          setStatus(els.controlStatus, error.message, true);
         }
-      };
+      }
 
-      els.finishBtn.onclick = async () => {
+      async function finishResearch() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select/create a project first", true);
+          setStatus(els.controlStatus, "Select or create a project first.", true);
           return;
         }
+
         const project = state.selectedProject;
         if (!project || (project.interview_store || []).length === 0 || (project.evidence_store || []).length === 0) {
           setStatus(
             els.controlStatus,
-            "Cannot finish: no ingested transcript/evidence yet. Complete one call and verify counters grow.",
+            "Cannot finish yet: no ingested transcript/evidence. Complete one call and wait for webhook ingestion.",
             true
           );
           return;
         }
+
         try {
-          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, {
-            method: "POST",
-          });
+          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, { method: "POST" });
           setStatus(els.controlStatus, "Generating report in background...");
-          await loadProject(state.selectedProjectId, true);
-          await refreshCards();
-        } catch (err) {
-          setStatus(els.controlStatus, err.message, true);
+          await loadProject(state.selectedProjectId, { silent: true });
+          await refreshCards({ silent: true });
+        } catch (error) {
+          setStatus(els.controlStatus, error.message, true);
         }
-      };
+      }
 
-      els.reloadBtn.onclick = async () => {
-        if (!state.selectedProjectId) return;
-        await loadProject(state.selectedProjectId);
-        await refreshCards();
-      };
-
-      els.connectSseBtn.onclick = connectSSE;
-      els.disconnectSseBtn.onclick = () => {
-        disconnectSSE();
-        setStatus(els.controlStatus, "SSE disconnected; polling fallback enabled");
-      };
-
+      els.createProjectBtn.onclick = createProject;
+      els.startBtn.onclick = startResearch;
+      els.finishBtn.onclick = finishResearch;
       els.rawToggle.onchange = () => {
         if (state.selectedProject) {
           renderReport(state.selectedProject);
         }
       };
 
-      els.refreshCardsBtn.onclick = refreshCards;
-
       async function boot() {
         await checkHealth();
-        await refreshCards();
+        renderLivePill();
+        await refreshCards({ silent: true });
 
         if (state.selectedProjectId) {
-          await loadProject(state.selectedProjectId, true);
-          connectSSE();
+          await selectProject(state.selectedProjectId, { silent: true });
         }
-        ensurePolling();
+
+        ensurePollingFallback();
+        ensureCardsRefreshLoop();
       }
 
       boot();

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections import defaultdict
 from datetime import datetime, timezone
 
 from agents.llm_client import LLMClient
@@ -19,9 +18,16 @@ class SynthesizerAgent:
         if len(project.interview_store) == 0 or len(project.evidence_store) == 0:
             return self._no_data_report(project)
 
+        quote_translations = await self._translate_quotes_to_english(project)
+        evidence_payload = []
+        for evidence in project.evidence_store:
+            item = evidence.model_dump(mode="json")
+            item["quote_english"] = quote_translations.get(evidence.id, evidence.quote.strip())
+            evidence_payload.append(item)
+
         payload = {
             "research_question": project.research_question,
-            "evidence": [e.model_dump(mode="json") for e in project.evidence_store],
+            "evidence": evidence_payload,
             "propositions": [p.model_dump(mode="json") for p in project.proposition_store],
             "metrics": project.metrics.model_dump(mode="json"),
             "interviews": len(project.interview_store),
@@ -30,6 +36,7 @@ class SynthesizerAgent:
                 "must_use_only_provided_evidence": True,
                 "must_not_invent_quotes": True,
                 "must_not_invent_participant_labels": True,
+                "translated_quotes_must_include_original_marker": '[original: "..."]',
             },
         }
 
@@ -51,7 +58,7 @@ class SynthesizerAgent:
             return llm_report
 
         reason = "LLM generation failed" if llm_error else "LLM output was not grounded in evidence"
-        return self._grounded_fallback_report(project, reason)
+        return self._grounded_fallback_report(project, reason, quote_translations)
 
     def _is_grounded(self, report: str, project: ProjectState) -> bool:
         text = report or ""
@@ -62,21 +69,120 @@ class SynthesizerAgent:
         if not evidence_quotes:
             return False
 
+        original_markers = self._extract_original_markers(text)
+        if original_markers:
+            for original in original_markers:
+                if not self._matches_any_evidence_quote(original, evidence_quotes):
+                    return False
+            return True
+
         quote_candidates = re.findall(r"[\"“](.*?)[\"”]", text, flags=re.DOTALL)
         for candidate in quote_candidates:
             norm_candidate = self._norm(candidate)
-            if len(norm_candidate) < 16:
+            if len(norm_candidate) < 10:
                 continue
-            matched = any(
-                norm_candidate in evidence_quote or evidence_quote in norm_candidate
-                for evidence_quote in evidence_quotes
-            )
-            if not matched:
+            if not self._matches_any_evidence_quote(norm_candidate, evidence_quotes):
                 return False
 
         return True
 
-    def _grounded_fallback_report(self, project: ProjectState, reason: str) -> str:
+    def _matches_any_evidence_quote(
+        self,
+        quote_or_norm: str,
+        evidence_quotes_norm: list[str],
+    ) -> bool:
+        norm_candidate = self._norm(quote_or_norm)
+        if not norm_candidate:
+            return False
+        return any(
+            norm_candidate in evidence_quote or evidence_quote in norm_candidate
+            for evidence_quote in evidence_quotes_norm
+        )
+
+    def _extract_original_markers(self, report: str) -> list[str]:
+        matches = re.findall(r"\[original:\s*\"(.*?)\"\s*\]", report, flags=re.IGNORECASE | re.DOTALL)
+        matches.extend(
+            re.findall(r"\[original:\s*'(.*?)'\s*\]", report, flags=re.IGNORECASE | re.DOTALL)
+        )
+        return [m.strip() for m in matches if m and m.strip()]
+
+    async def _translate_quotes_to_english(self, project: ProjectState) -> dict[str, str]:
+        translations: dict[str, str] = {}
+        source_quotes: list[dict[str, str]] = []
+
+        for evidence in project.evidence_store:
+            quote = evidence.quote.strip()
+            if not quote:
+                continue
+
+            language = (evidence.language or "").strip().lower()
+            if language.startswith("en"):
+                translations[evidence.id] = quote
+                continue
+
+            source_quotes.append(
+                {
+                    "id": evidence.id,
+                    "language": language or "unknown",
+                    "quote": quote,
+                }
+            )
+
+        if not source_quotes or not hasattr(self.llm, "chat_json"):
+            return translations
+
+        system_prompt = (
+            "You translate interview quotes into English. "
+            "Return strict JSON with key `translations` containing "
+            "a list of {id, english}. Keep meaning faithful. No extra commentary."
+        )
+
+        try:
+            result = await self.llm.chat_json(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps({"quotes": source_quotes}, ensure_ascii=False)},
+                ],
+                temperature=0.0,
+                max_tokens=2048,
+            )
+        except Exception:
+            for item in source_quotes:
+                translations.setdefault(item["id"], item["quote"])
+            return translations
+
+        items: list[dict] = []
+        if isinstance(result.get("translations"), list):
+            items = [x for x in result.get("translations", []) if isinstance(x, dict)]
+        elif isinstance(result.get("items"), list):
+            items = [x for x in result.get("items", []) if isinstance(x, dict)]
+        elif isinstance(result, dict):
+            for key, value in result.items():
+                if isinstance(value, str):
+                    items.append({"id": key, "english": value})
+
+        for item in items:
+            evidence_id = str(item.get("id") or "").strip()
+            english = str(
+                item.get("english")
+                or item.get("translation")
+                or item.get("translated")
+                or ""
+            ).strip()
+            if evidence_id and english:
+                translations[evidence_id] = english
+
+        for item in source_quotes:
+            translations.setdefault(item["id"], item["quote"])
+
+        return translations
+
+    def _grounded_fallback_report(
+        self,
+        project: ProjectState,
+        reason: str,
+        quote_translations: dict[str, str],
+    ) -> str:
         evidence_by_id = {e.id: e for e in project.evidence_store}
         total_interviews = len(project.interview_store)
         total_evidence = len(project.evidence_store)
@@ -124,7 +230,16 @@ class SynthesizerAgent:
                 for eid in prop.supporting_evidence[:3]:
                     ev = evidence_by_id.get(eid)
                     if ev and ev.quote.strip():
-                        quote_lines.append(f"- [{ev.id}] \"{ev.quote.strip()}\"")
+                        original_quote = self._escape_inline_quote(ev.quote)
+                        english_quote = self._escape_inline_quote(
+                            quote_translations.get(ev.id, ev.quote)
+                        )
+                        if self._norm(original_quote) == self._norm(english_quote):
+                            quote_lines.append(f"- [{ev.id}] \"{english_quote}\"")
+                        else:
+                            quote_lines.append(
+                                f"- [{ev.id}] \"{english_quote}\" [original: \"{original_quote}\"]"
+                            )
 
                 if quote_lines:
                     lines.append("Supporting quotes:")
@@ -149,7 +264,14 @@ class SynthesizerAgent:
             lines.append(
                 f"- [{ev.id}] ({ev.language}) {ev.factor} -> {ev.mechanism} -> {ev.outcome}"
             )
-            lines.append(f"  Quote: \"{ev.quote.strip()}\"")
+            original_quote = self._escape_inline_quote(ev.quote)
+            english_quote = self._escape_inline_quote(quote_translations.get(ev.id, ev.quote))
+            if self._norm(original_quote) == self._norm(english_quote):
+                lines.append(f"  Quote (EN): \"{english_quote}\"")
+            else:
+                lines.append(
+                    f"  Quote (EN): \"{english_quote}\" [original: \"{original_quote}\"]"
+                )
         lines.append("")
 
         lines.append("## Next Steps")
@@ -185,4 +307,8 @@ class SynthesizerAgent:
         )
 
     def _norm(self, text: str) -> str:
-        return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9а-яё\s]", "", text.lower())).strip()
+        normalized = re.sub(r"[^\w\s]", "", text.lower(), flags=re.UNICODE).replace("_", " ")
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    def _escape_inline_quote(self, text: str) -> str:
+        return str(text or "").strip().replace('"', "'")

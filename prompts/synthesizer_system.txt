@@ -16,3 +16,6 @@ Rules:
 - Never use placeholders like "Participant A" unless such label is explicitly present in evidence text.
 - If data is insufficient, explicitly say so and explain what is missing.
 - Keep report under 2000 words.
+- If a quote is non-English, translate it to natural English for readability.
+- For every quoted line, append the exact original quote in this format: `[original: "..."]`.
+- Never alter text inside `[original: "..."]`; it must exactly match evidence quote text.
