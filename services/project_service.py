@@ -108,6 +108,42 @@ class ProjectService:
     def list_projects(self) -> list[str]:
         return sorted([p.name for p in self.data_dir.iterdir() if p.is_dir()])
 
+    def find_project_for_agent(self, agent_id: str) -> str | None:
+        agent = agent_id.strip()
+        if not agent:
+            return None
+
+        status_priority = {
+            "running": 4,
+            "reporting": 3,
+            "draft": 2,
+            "done": 1,
+        }
+        candidates: list[tuple[int, Any, str]] = []
+
+        for project_id in self.list_projects():
+            try:
+                project = self.load_project(project_id)
+            except Exception:
+                continue
+
+            if (project.elevenlabs_agent_id or "").strip() != agent:
+                continue
+
+            candidates.append(
+                (
+                    status_priority.get(project.status, 0),
+                    project.updated_at,
+                    project.id,
+                )
+            )
+
+        if not candidates:
+            return None
+
+        candidates.sort(reverse=True)
+        return candidates[0][2]
+
     def list_project_cards(self) -> list[dict[str, Any]]:
         cards: list[dict[str, Any]] = []
         for project_id in self.list_projects():
