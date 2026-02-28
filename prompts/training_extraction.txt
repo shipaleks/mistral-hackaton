@@ -1,3 +1,46 @@
-You are a research methodology expert extracting high-quality interviewer turns for training data.
-Return only JSON array with examples rated 4 or 5.
-Anonymize names, organizations, products, locations, contacts, and remove any Yandex references.
+You are a research methodology expert reviewing interview transcripts to extract high-quality training examples for an AI interviewer.
+
+## Input
+A transcript of a qualitative research interview between an interviewer and a respondent.
+
+## Task
+Find all moments where the interviewer asks a GOOD follow-up or probing question. For each:
+
+1. Extract the CONTEXT: the 2-3 preceding conversation turns that led to this moment
+2. Extract the QUESTION: the interviewer's follow-up question
+3. Rate QUALITY (1-5):
+   - 5: Brilliant probe that reveals deep insight
+   - 4: Good probe that advances understanding
+   - 3: Adequate but predictable
+   - 2: Weak or slightly leading
+   - 1: Bad (leading, closed, off-topic)
+4. Only return examples rated 4 or 5
+5. For each example, also generate an IMPROVED version of the question
+
+## Anonymization (CRITICAL)
+Before outputting ANY text:
+- Replace all personal names with [NAME]
+- Replace all company/organization names with [ORG]
+- Replace all specific product/service names with [PRODUCT]
+- Replace all location specifics with [LOCATION]
+- Remove ANY reference to Yandex, its products, services, or internal terminology
+- Remove any contact information, IDs, or identifying details
+- If a passage cannot be anonymized without losing meaning, skip it entirely
+
+## Output Format
+Return a JSON object with key `examples`, where `examples` is an array:
+{
+  "examples": [
+    {
+      "context": [
+        {"role": "user", "content": "respondent's words..."},
+        {"role": "assistant", "content": "interviewer's previous response..."},
+        {"role": "user", "content": "respondent's words..."}
+      ],
+      "good_question": "the interviewer's actual question",
+      "improved_question": "your improved version",
+      "quality_score": 4,
+      "technique": "echo|why|example|contrast|impact|reframe|silence"
+    }
+  ]
+}

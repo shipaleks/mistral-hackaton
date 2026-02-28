@@ -99,7 +99,8 @@ eidetic/
 │   └── public/
 │
 ├── training/                    # Fine-tuning pipeline (optional)
-│   ├── transcribe.py           # Voxtral transcription
+│   ├── transcribe.py           # Voxtral transcription (V2, diarization)
+│   ├── normalize_speakers.py   # Force two roles: MODERATOR/INTERVIEWEE
 │   ├── extract_examples.py     # Training data extraction
 │   ├── anonymize.py            # PII + Yandex reference removal
 │   ├── format_jsonl.py         # JSONL formatting for Mistral API

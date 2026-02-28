@@ -64,6 +64,7 @@ eidetic/
 │   └── (React app — created via Vite or CRA)
 ├── training/
 │   ├── transcribe.py
+│   ├── normalize_speakers.py
 │   ├── extract_examples.py
 │   ├── anonymize.py
 │   ├── format_jsonl.py
@@ -405,19 +406,22 @@ Open `http://localhost:5173` (or Koyeb URL) → "New Project" → fill in resear
 
 ```bash
 # 1. Transcribe with Voxtral (diarization enabled)
-python training/transcribe.py --input-dir training/audio/ --output-dir training/transcripts/
+python training/transcribe.py --input-dir training/audio/ --output-dir training/transcripts/ --model voxtral-mini-2602
 
-# 2. Extract training examples (good interviewer questions)
-python training/extract_examples.py --input-dir training/transcripts/ --output training/examples_raw.jsonl
+# 2. Normalize diarization to exactly two roles (MODERATOR / INTERVIEWEE)
+python training/normalize_speakers.py --input-dir training/transcripts/ --output-dir training/transcripts_normalized/
 
-# 3. Anonymize (remove PII + all Yandex references)
+# 3. Extract training examples (good interviewer questions)
+python training/extract_examples.py --input-dir training/transcripts_normalized/ --output training/examples_raw.jsonl
+
+# 4. Anonymize (remove PII + all Yandex references)
 python training/anonymize.py --input training/examples_raw.jsonl --output training/examples_clean.jsonl
 
-# 4. Format for Mistral fine-tuning API
+# 5. Format for Mistral fine-tuning API
 python training/format_jsonl.py --input training/examples_clean.jsonl --output training/finetune_data.jsonl
 
-# 5. Launch fine-tuning job
-python training/finetune.py --data training/finetune_data.jsonl --model mistral-small-latest
+# 6. Launch fine-tuning job
+python training/finetune.py --data training/finetune_data.jsonl --model mistral-large-latest --poll
 ```
 
 Fine-tuning takes ~30-60 minutes. The resulting model ID can be used as `INTERVIEWER_MODEL` in `.env`.

@@ -11,4 +11,11 @@ dashboard/build/
 dashboard/dist/
 data/projects/*/
 !data/projects/.gitkeep
+training/audio/
+training/transcripts/
+training/transcripts_normalized/
+training/artifacts/
+training/examples_raw.jsonl
+training/examples_clean.jsonl
+training/finetune_data.jsonl
 .DS_Store
