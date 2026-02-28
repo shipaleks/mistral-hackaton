@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +13,9 @@ from models.script import InterviewScript
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+ProjectStatus = Literal["draft", "running", "reporting", "done"]
 
 
 class ProjectMetrics(BaseModel):
@@ -28,8 +32,17 @@ class ProjectState(BaseModel):
     id: str
     research_question: str
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     initial_angles: list[str] = Field(default_factory=list)
     elevenlabs_agent_id: str | None = None
+
+    status: ProjectStatus = "draft"
+    talk_to_link: str | None = None
+
+    report_markdown: str | None = None
+    report_generated_at: datetime | None = None
+    report_stale: bool = False
+    finished_at: datetime | None = None
 
     evidence_store: list[Evidence] = Field(default_factory=list)
     proposition_store: list[Proposition] = Field(default_factory=list)

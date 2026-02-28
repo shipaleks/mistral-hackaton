@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from models.interview import Interview
-from models.project import ProjectState
+from models.project import ProjectState, utc_now
 from models.script import InterviewScript
 
 
@@ -47,6 +47,7 @@ class ProjectService:
             id=project_id,
             research_question=research_question,
             initial_angles=initial_angles or [],
+            status="draft",
         )
         self._project_dir(project_id).mkdir(parents=True, exist_ok=True)
         self._interviews_dir(project_id).mkdir(parents=True, exist_ok=True)
@@ -68,6 +69,7 @@ class ProjectService:
         self._interviews_dir(project.id).mkdir(parents=True, exist_ok=True)
         self._scripts_dir(project.id).mkdir(parents=True, exist_ok=True)
 
+        project.updated_at = utc_now()
         with self._project_file(project.id).open("w", encoding="utf-8") as f:
             json.dump(project.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
 
@@ -106,6 +108,35 @@ class ProjectService:
     def list_projects(self) -> list[str]:
         return sorted([p.name for p in self.data_dir.iterdir() if p.is_dir()])
 
+    def list_project_cards(self) -> list[dict[str, Any]]:
+        cards: list[dict[str, Any]] = []
+        for project_id in self.list_projects():
+            try:
+                project = self.load_project(project_id)
+            except Exception:
+                continue
+            cards.append(self.project_card(project))
+        cards.sort(key=lambda x: x["updated_at"], reverse=True)
+        return cards
+
+    def project_card(self, project: ProjectState) -> dict[str, Any]:
+        return {
+            "id": project.id,
+            "status": project.status,
+            "research_question": project.research_question,
+            "interviews_count": len(project.interview_store),
+            "evidence_count": len(project.evidence_store),
+            "propositions_count": len(project.proposition_store),
+            "active_propositions_count": len(
+                [p for p in project.proposition_store if p.status not in {"weak", "merged"}]
+            ),
+            "convergence_score": project.metrics.convergence_score,
+            "novelty_rate": project.metrics.novelty_rate,
+            "mode": project.metrics.mode,
+            "updated_at": project.updated_at.isoformat(),
+            "report_stale": project.report_stale,
+        }
+
     def project_summary(self, project_id: str) -> dict[str, Any]:
         project = self.load_project(project_id)
         return {
@@ -116,4 +147,6 @@ class ProjectService:
             "propositions": len(project.proposition_store),
             "scripts": len(project.script_versions),
             "mode": project.metrics.mode,
+            "status": project.status,
+            "report_stale": project.report_stale,
         }

@@ -3,86 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Eidetic Projects</title>
+    <title>Eidetic Demo Console</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <style>
       :root {
-        --bg: #f7f8fa;
-        --card: #ffffff;
-        --text: #1f2937;
-        --muted: #6b7280;
-        --line: #e5e7eb;
+        --bg: #f4f4f0;
+        --panel: #fffef8;
+        --line: #d9d7cc;
+        --ink: #1e1e18;
+        --muted: #68685d;
+        --green: #0f766e;
+        --amber: #b45309;
+        --red: #b91c1c;
         --accent: #0f766e;
-        --accent-soft: #ccfbf1;
-        --danger: #b91c1c;
       }
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, #efebe0, #f6f7f2 65%);
         font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        color: var(--text);
-        background: linear-gradient(180deg, #f3f4f6 0%, #f9fafb 100%);
       }
-      .page {
-        max-width: 1100px;
-        margin: 24px auto;
-        padding: 0 16px;
+      .layout {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        min-height: 100vh;
       }
-      .header {
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: #f5f3ea;
+        padding: 16px;
+      }
+      .content {
+        padding: 16px;
+      }
+      .brand {
+        margin-bottom: 14px;
+      }
+      .brand h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .brand p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .status-pill {
+        display: inline-block;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        background: #fff;
+        color: var(--muted);
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .projects-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 16px;
+        margin-bottom: 10px;
       }
-      .title {
-        font-size: 28px;
-        font-weight: 700;
+      .project-list {
+        display: grid;
+        gap: 8px;
+        max-height: calc(100vh - 190px);
+        overflow: auto;
       }
-      .subtitle {
-        color: var(--muted);
+      .project-item {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .project-item.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent) inset;
+      }
+      .project-item h4 {
+        margin: 0;
         font-size: 14px;
+      }
+      .project-meta {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
-      .card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 14px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-      }
-      .card h3 {
-        margin: 0 0 10px;
-        font-size: 16px;
+      .grid-full {
+        grid-column: 1 / -1;
       }
       label {
         display: block;
-        margin-top: 8px;
-        font-size: 12px;
         color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 6px;
       }
-      input, textarea, select {
+      input,
+      textarea {
         width: 100%;
-        margin-top: 4px;
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 8px;
         font-size: 14px;
+        font-family: inherit;
         background: #fff;
       }
-      textarea { min-height: 100px; resize: vertical; }
+      textarea {
+        min-height: 78px;
+        resize: vertical;
+      }
       .row {
         display: flex;
         gap: 8px;
-        margin-top: 10px;
         flex-wrap: wrap;
       }
       button {
         border: 1px solid var(--line);
-        border-radius: 8px;
         background: #fff;
+        border-radius: 8px;
         padding: 8px 12px;
         cursor: pointer;
       }
@@ -91,122 +144,290 @@
         border-color: var(--accent);
         color: #fff;
       }
-      button.soft {
-        background: var(--accent-soft);
-        border-color: #99f6e4;
+      button.warn {
+        background: #fff7ed;
+        border-color: #fdba74;
+        color: #7c2d12;
       }
-      .status {
-        margin-top: 10px;
-        font-size: 13px;
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .helper {
+        margin-top: 8px;
+        font-size: 12px;
         color: var(--muted);
         white-space: pre-wrap;
       }
-      .status.error { color: var(--danger); }
-      pre {
-        margin: 10px 0 0;
-        background: #111827;
-        color: #e5e7eb;
+      .error {
+        color: var(--red);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .metric {
+        border: 1px solid var(--line);
         border-radius: 8px;
-        padding: 10px;
-        font-size: 12px;
-        max-height: 280px;
-        overflow: auto;
+        padding: 8px;
+        background: #fff;
       }
-      .footer {
-        margin-top: 14px;
+      .metric .k {
+        font-size: 11px;
         color: var(--muted);
-        font-size: 12px;
       }
-      .pill {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 999px;
+      .metric .v {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .talk-block {
+        display: grid;
+        grid-template-columns: 1fr 128px;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .talk-link {
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .qr {
+        width: 128px;
+        height: 128px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        object-fit: contain;
+      }
+      #graph {
+        width: 100%;
+        height: 460px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+      #saturation {
+        width: 100%;
+        height: 170px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+      .legend {
+        margin-top: 8px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
         font-size: 12px;
-        background: #ecfeff;
-        border: 1px solid #a5f3fc;
-        color: #155e75;
+        color: var(--muted);
+      }
+      .dot {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .dot::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .report-wrap {
+        max-height: 360px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px;
+      }
+      details {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        padding: 8px;
+        background: #fff;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .talk-block {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="page">
-      <div class="header">
-        <div>
-          <div class="title">Eidetic Control Panel</div>
-          <div class="subtitle">Minimal UI for project lifecycle and webhook pipeline checks</div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <h1>Eidetic</h1>
+          <p>Autonomous qualitative research demo console</p>
+          <div class="status-pill" id="health">health: ...</div>
         </div>
-        <div class="pill" id="healthBadge">health: unknown</div>
-      </div>
-
-      <div class="grid">
-        <section class="card">
-          <h3>1) Create Project</h3>
-          <label>Project ID<input id="createId" value="hackathon-demo" /></label>
-          <label>Research question<textarea id="createQuestion">What is your experience with this hackathon so far?</textarea></label>
-          <label>Initial angles (comma separated)<input id="createAngles" value="organization, food, mentors, difficulty, team formation, time pressure" /></label>
-          <div class="row">
-            <button class="primary" id="createBtn">Create</button>
+        <div class="card">
+          <div class="projects-head">
+            <strong>Projects</strong>
+            <button id="refreshCardsBtn">Refresh</button>
           </div>
-          <div class="status" id="createStatus"></div>
-        </section>
+          <div class="project-list" id="projectList"></div>
+        </div>
+      </aside>
 
-        <section class="card">
-          <h3>2) Select & Start</h3>
-          <label>Existing projects<select id="projectSelect"></select></label>
-          <label>ElevenLabs agent ID (optional override)<input id="agentId" placeholder="agent_xxx" /></label>
-          <div class="row">
-            <button class="soft" id="refreshProjectsBtn">Refresh</button>
-            <button class="primary" id="startBtn">Start Project</button>
-            <button id="openTalkBtn">Open Talk Link</button>
-          </div>
-          <div class="status" id="startStatus"></div>
-        </section>
+      <main class="content">
+        <div class="grid">
+          <section class="card">
+            <h3>Create Project</h3>
+            <label>
+              Research question
+              <textarea id="researchQuestion">What is your experience with this hackathon so far?</textarea>
+            </label>
+            <div class="row">
+              <button class="primary" id="createProjectBtn">Create</button>
+            </div>
+            <div class="helper" id="createStatus"></div>
+          </section>
 
-        <section class="card">
-          <h3>3) Inspect State</h3>
-          <div class="row">
-            <button class="soft" id="loadStateBtn">Load Project State</button>
-            <button id="synthesizeBtn">Synthesize Report</button>
-          </div>
-          <div class="status" id="stateStatus"></div>
-          <pre id="stateDump">{}</pre>
-        </section>
+          <section class="card">
+            <h3>Start & Interview Link</h3>
+            <label>
+              ElevenLabs agent id override (optional)
+              <input id="agentId" placeholder="agent_xxx" />
+            </label>
+            <div class="row">
+              <button class="primary" id="startBtn">Start Research</button>
+              <button class="warn" id="finishBtn">Finish & Generate Report</button>
+              <button id="reloadBtn">Reload State</button>
+            </div>
+            <div class="helper" id="controlStatus"></div>
+            <div class="talk-block" id="talkBlock" style="display:none;">
+              <div>
+                <div><strong>Talk URL</strong></div>
+                <div class="talk-link" id="talkLink"></div>
+                <div class="row" style="margin-top:8px;">
+                  <button id="openTalkBtn">Open Link</button>
+                  <button id="connectSseBtn">Connect SSE</button>
+                  <button id="disconnectSseBtn">Disconnect SSE</button>
+                </div>
+              </div>
+              <img id="qrImg" class="qr" alt="Project QR" />
+            </div>
+          </section>
 
-        <section class="card">
-          <h3>4) Simulate Interview (local smoke)</h3>
-          <label>Transcript<textarea id="simulateTranscript">User: Time pressure helped us focus. We cut scope early.</textarea></label>
-          <div class="row">
-            <button class="primary" id="simulateBtn">Send Simulated Interview</button>
-          </div>
-          <div class="status" id="simulateStatus"></div>
-        </section>
+          <section class="card grid-full">
+            <h3>Live Saturation Metrics</h3>
+            <div class="stats" id="stats"></div>
+            <svg id="saturation"></svg>
+            <div class="legend" id="modeLabel"></div>
+          </section>
 
-        <section class="card" style="grid-column: 1 / -1;">
-          <h3>5) SSE Events</h3>
-          <div class="row">
-            <button class="soft" id="connectSseBtn">Connect SSE</button>
-            <button id="disconnectSseBtn">Disconnect SSE</button>
-            <button id="clearEventsBtn">Clear</button>
-          </div>
-          <div class="status" id="sseStatus"></div>
-          <pre id="sseDump"></pre>
-        </section>
-      </div>
+          <section class="card grid-full">
+            <h3>Knowledge Graph (Evidence)</h3>
+            <svg id="graph"></svg>
+            <div class="legend">
+              <span class="dot" style="color:#16a34a;">confirmed overlay</span>
+              <span class="dot" style="color:#eab308;">exploring overlay</span>
+              <span class="dot" style="color:#dc2626;">challenged overlay</span>
+              <span class="dot" style="color:#9ca3af;">weak/merged overlay</span>
+            </div>
+          </section>
 
-      <div class="footer">
-        API base is current origin. Webhook callback for ElevenLabs must be: <code>/api/webhook/elevenlabs</code>.
-      </div>
+          <section class="card grid-full">
+            <h3>Report</h3>
+            <div class="row">
+              <label style="display:flex;align-items:center;gap:6px;color:var(--ink);">
+                <input type="checkbox" id="rawToggle" style="width:auto;" />
+                Raw markdown
+              </label>
+            </div>
+            <div class="helper" id="reportStatus"></div>
+            <div class="report-wrap" id="reportView"></div>
+          </section>
+        </div>
+      </main>
     </div>
 
     <script>
-      const healthBadge = document.getElementById("healthBadge");
-      const projectSelect = document.getElementById("projectSelect");
-      let lastStartResponse = null;
-      let sse = null;
+      const state = {
+        selectedProjectId: null,
+        selectedProject: null,
+        cards: [],
+        sse: null,
+        sseConnected: false,
+        pollingTimer: null,
+        graph: {
+          simulation: null,
+          nodePositions: new Map(),
+          svg: null,
+          gOverlays: null,
+          gLinks: null,
+          gNodes: null,
+        },
+      };
 
-      function setStatus(el, value, isError = false) {
-        el.textContent = value;
+      const els = {
+        health: document.getElementById("health"),
+        projectList: document.getElementById("projectList"),
+        researchQuestion: document.getElementById("researchQuestion"),
+        createProjectBtn: document.getElementById("createProjectBtn"),
+        createStatus: document.getElementById("createStatus"),
+        agentId: document.getElementById("agentId"),
+        startBtn: document.getElementById("startBtn"),
+        finishBtn: document.getElementById("finishBtn"),
+        controlStatus: document.getElementById("controlStatus"),
+        reloadBtn: document.getElementById("reloadBtn"),
+        talkBlock: document.getElementById("talkBlock"),
+        talkLink: document.getElementById("talkLink"),
+        qrImg: document.getElementById("qrImg"),
+        openTalkBtn: document.getElementById("openTalkBtn"),
+        connectSseBtn: document.getElementById("connectSseBtn"),
+        disconnectSseBtn: document.getElementById("disconnectSseBtn"),
+        stats: document.getElementById("stats"),
+        saturation: document.getElementById("saturation"),
+        modeLabel: document.getElementById("modeLabel"),
+        graph: document.getElementById("graph"),
+        reportStatus: document.getElementById("reportStatus"),
+        reportView: document.getElementById("reportView"),
+        rawToggle: document.getElementById("rawToggle"),
+        refreshCardsBtn: document.getElementById("refreshCardsBtn"),
+      };
+
+      function setStatus(el, text, isError = false) {
+        el.textContent = text;
         el.classList.toggle("error", isError);
+      }
+
+      function toPct(v) {
+        return `${Math.round((Number(v) || 0) * 100)}%`;
+      }
+
+      function statusColor(status) {
+        if (status === "done") return "#0f766e";
+        if (status === "reporting") return "#b45309";
+        if (status === "running") return "#2563eb";
+        return "#6b7280";
       }
 
       async function api(path, options = {}) {
@@ -216,7 +437,11 @@
         });
         const text = await resp.text();
         let body;
-        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch {
+          body = text;
+        }
         if (!resp.ok) {
           throw new Error(`${resp.status} ${resp.statusText}: ${typeof body === "string" ? body : JSON.stringify(body)}`);
         }
@@ -226,178 +451,628 @@
       async function checkHealth() {
         try {
           const result = await api("/health");
-          healthBadge.textContent = `health: ${result.status}`;
-        } catch (err) {
-          healthBadge.textContent = "health: down";
+          els.health.textContent = `health: ${result.status}`;
+        } catch {
+          els.health.textContent = "health: down";
         }
       }
 
-      async function refreshProjects() {
-        const status = document.getElementById("startStatus");
+      async function refreshCards() {
         try {
-          const result = await api("/api/projects");
-          const projects = result.projects || [];
-          projectSelect.innerHTML = "";
-          for (const id of projects) {
-            const opt = document.createElement("option");
-            opt.value = id;
-            opt.textContent = id;
-            projectSelect.appendChild(opt);
-          }
-          if (projects.length === 0) {
-            const opt = document.createElement("option");
-            opt.textContent = "(none)";
-            opt.value = "";
-            projectSelect.appendChild(opt);
-          }
-          setStatus(status, `projects: ${projects.join(", ") || "none"}`);
+          state.cards = await api("/api/projects/cards");
+          renderCards();
         } catch (err) {
-          setStatus(status, err.message, true);
+          setStatus(els.controlStatus, err.message, true);
         }
       }
 
-      document.getElementById("createBtn").onclick = async () => {
-        const status = document.getElementById("createStatus");
-        const id = document.getElementById("createId").value.trim();
-        const question = document.getElementById("createQuestion").value.trim();
-        const angles = document.getElementById("createAngles").value.split(",").map(s => s.trim()).filter(Boolean);
+      function renderCards() {
+        els.projectList.innerHTML = "";
+        if (!state.cards.length) {
+          const empty = document.createElement("div");
+          empty.className = "project-item";
+          empty.textContent = "No projects yet";
+          els.projectList.appendChild(empty);
+          return;
+        }
+
+        if (!state.selectedProjectId) {
+          state.selectedProjectId = state.cards[0].id;
+        }
+
+        for (const card of state.cards) {
+          const el = document.createElement("div");
+          el.className = `project-item${card.id === state.selectedProjectId ? " active" : ""}`;
+          el.innerHTML = `
+            <h4>${card.id}</h4>
+            <div class="project-meta">
+              <div style="color:${statusColor(card.status)};font-weight:600;">${card.status}${card.report_stale ? " • stale report" : ""}</div>
+              <div>${card.interviews_count} interviews • ${card.evidence_count} evidence</div>
+              <div>conv ${toPct(card.convergence_score)} • novelty ${toPct(card.novelty_rate)}</div>
+            </div>
+          `;
+          el.onclick = async () => {
+            state.selectedProjectId = card.id;
+            renderCards();
+            await loadProject(card.id);
+            connectSSE();
+          };
+          els.projectList.appendChild(el);
+        }
+      }
+
+      async function loadProject(projectId, silent = false) {
+        if (!projectId) return;
+        try {
+          state.selectedProject = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+          if (!silent) {
+            setStatus(els.controlStatus, `Loaded ${projectId}`);
+          }
+          renderProject(state.selectedProject);
+        } catch (err) {
+          setStatus(els.controlStatus, err.message, true);
+        }
+      }
+
+      function renderProject(project) {
+        renderStats(project);
+        renderSaturation(project);
+        renderKnowledgeGraph(project);
+        renderTalk(project);
+        renderReport(project);
+      }
+
+      function renderStats(project) {
+        const activeProps = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
+        const metrics = [
+          ["Participants", String((project.interview_store || []).length)],
+          ["Evidence", String((project.evidence_store || []).length)],
+          ["Active propositions", String(activeProps)],
+          ["Convergence", toPct(project.metrics?.convergence_score)],
+          ["Novelty", toPct(project.metrics?.novelty_rate)],
+        ];
+        els.stats.innerHTML = metrics
+          .map(([k, v]) => `<div class="metric"><div class="k">${k}</div><div class="v">${v}</div></div>`)
+          .join("");
+      }
+
+      function renderTalk(project) {
+        const talk = project.talk_to_link;
+        if (!talk) {
+          els.talkBlock.style.display = "none";
+          return;
+        }
+        els.talkBlock.style.display = "grid";
+        els.talkLink.textContent = talk;
+        els.openTalkBtn.onclick = () => window.open(talk, "_blank");
+        els.qrImg.src = `/api/projects/${encodeURIComponent(project.id)}/qrcode?ts=${Date.now()}`;
+      }
+
+      function parseMarkdownSections(markdown) {
+        const lines = String(markdown || "").split("\n");
+        const sections = [];
+        let current = { title: "Overview", body: [] };
+
+        for (const line of lines) {
+          const h2 = line.match(/^##\s+(.+)/);
+          const h3 = line.match(/^###\s+(.+)/);
+          if (h2 || h3) {
+            if (current.body.length) {
+              sections.push({ title: current.title, body: current.body.join("\n").trim() });
+            }
+            current = { title: (h2 || h3)[1].trim(), body: [] };
+          } else {
+            current.body.push(line);
+          }
+        }
+        if (current.body.length) {
+          sections.push({ title: current.title, body: current.body.join("\n").trim() });
+        }
+        return sections.filter((s) => s.body);
+      }
+
+      function renderReport(project) {
+        if (!project.report_markdown) {
+          const suffix = project.report_stale ? " (stale)" : "";
+          setStatus(els.reportStatus, `No report yet. Status: ${project.status}${suffix}`);
+          els.reportView.innerHTML = "";
+          return;
+        }
+
+        const staleText = project.report_stale ? " • stale" : "";
+        setStatus(
+          els.reportStatus,
+          `Report generated: ${project.report_generated_at || "unknown"}${staleText}`
+        );
+
+        if (els.rawToggle.checked) {
+          els.reportView.innerHTML = `<pre class="mono">${escapeHtml(project.report_markdown)}</pre>`;
+          return;
+        }
+
+        const sections = parseMarkdownSections(project.report_markdown);
+        els.reportView.innerHTML = sections
+          .map(
+            (s, idx) => `
+              <details ${idx === 0 ? "open" : ""}>
+                <summary>${escapeHtml(s.title)}</summary>
+                <div class="mono">${escapeHtml(s.body)}</div>
+              </details>
+            `
+          )
+          .join("");
+      }
+
+      function renderSaturation(project) {
+        const svg = d3.select(els.saturation);
+        svg.selectAll("*").remove();
+
+        const width = els.saturation.clientWidth || 600;
+        const height = els.saturation.clientHeight || 170;
+        svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+        const scripts = project.script_versions || [];
+        const points = scripts.length
+          ? scripts.map((s, idx) => ({
+              i: idx + 1,
+              conv: Number(s.convergence_score || 0),
+              nov: Number(s.novelty_rate || 0),
+            }))
+          : [{ i: 1, conv: Number(project.metrics?.convergence_score || 0), nov: Number(project.metrics?.novelty_rate || 0) }];
+
+        const margin = { top: 14, right: 20, bottom: 24, left: 30 };
+        const x = d3
+          .scaleLinear()
+          .domain([1, Math.max(2, d3.max(points, (d) => d.i) || 2)])
+          .range([margin.left, width - margin.right]);
+        const y = d3.scaleLinear().domain([0, 1]).range([height - margin.bottom, margin.top]);
+
+        const lineConv = d3
+          .line()
+          .x((d) => x(d.i))
+          .y((d) => y(d.conv));
+        const lineNov = d3
+          .line()
+          .x((d) => x(d.i))
+          .y((d) => y(d.nov));
+
+        svg
+          .append("path")
+          .datum(points)
+          .attr("fill", "none")
+          .attr("stroke", "#0f766e")
+          .attr("stroke-width", 2)
+          .attr("d", lineConv);
+
+        svg
+          .append("path")
+          .datum(points)
+          .attr("fill", "none")
+          .attr("stroke", "#b45309")
+          .attr("stroke-width", 2)
+          .attr("d", lineNov);
+
+        svg
+          .append("line")
+          .attr("x1", margin.left)
+          .attr("x2", width - margin.right)
+          .attr("y1", y(0.6))
+          .attr("y2", y(0.6))
+          .attr("stroke", "#9ca3af")
+          .attr("stroke-dasharray", "3,3");
+
+        svg
+          .append("line")
+          .attr("x1", margin.left)
+          .attr("x2", width - margin.right)
+          .attr("y1", y(0.15))
+          .attr("y2", y(0.15))
+          .attr("stroke", "#d6d3d1")
+          .attr("stroke-dasharray", "3,3");
+
+        svg
+          .append("g")
+          .attr("transform", `translate(0,${height - margin.bottom})`)
+          .call(d3.axisBottom(x).ticks(Math.min(6, points.length + 1)).tickFormat((d) => `v${d}`));
+
+        svg
+          .append("g")
+          .attr("transform", `translate(${margin.left},0)`)
+          .call(d3.axisLeft(y).ticks(5).tickFormat((d) => `${Math.round(d * 100)}%`));
+
+        els.modeLabel.innerHTML = `
+          <span class="dot" style="color:#0f766e;">convergence</span>
+          <span class="dot" style="color:#b45309;">novelty</span>
+          <span>mode: <strong>${project.metrics?.mode || "divergent"}</strong></span>
+        `;
+      }
+
+      function ensureGraphInit() {
+        if (state.graph.svg) return;
+        const svg = d3.select(els.graph);
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 460;
+        svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+        state.graph.svg = svg;
+        state.graph.gOverlays = svg.append("g").attr("class", "overlays");
+        state.graph.gLinks = svg.append("g").attr("class", "links");
+        state.graph.gNodes = svg.append("g").attr("class", "nodes");
+      }
+
+      function tokenize(str) {
+        return new Set(
+          String(str || "")
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .filter((x) => x.length > 2)
+        );
+      }
+
+      function jaccard(setA, setB) {
+        if (!setA.size && !setB.size) return 0;
+        let inter = 0;
+        for (const item of setA) {
+          if (setB.has(item)) inter += 1;
+        }
+        return inter / (setA.size + setB.size - inter || 1);
+      }
+
+      function propositionColor(prop) {
+        if (["weak", "merged"].includes(prop.status)) return "#9ca3af";
+        if ((prop.confidence || 0) < 0.35) return "#dc2626";
+        if ((prop.confidence || 0) < 0.7) return "#eab308";
+        return "#16a34a";
+      }
+
+      function renderKnowledgeGraph(project) {
+        ensureGraphInit();
+        const svg = state.graph.svg;
+        const gOverlays = state.graph.gOverlays;
+        const gLinks = state.graph.gLinks;
+        const gNodes = state.graph.gNodes;
+
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 460;
+        svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+        const evidence = (project.evidence_store || []).map((e) => ({ ...e }));
+        if (!evidence.length) {
+          gLinks.selectAll("*").remove();
+          gNodes.selectAll("*").remove();
+          gOverlays.selectAll("*").remove();
+          gNodes
+            .append("text")
+            .attr("x", width / 2)
+            .attr("y", height / 2)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#6b7280")
+            .text("No evidence yet. Start interviews to populate the graph.");
+          return;
+        }
+
+        const propositionMap = new Map((project.proposition_store || []).map((p) => [p.id, p]));
+        const evidenceToProps = new Map(evidence.map((e) => [e.id, new Set()]));
+        for (const p of project.proposition_store || []) {
+          for (const id of [...(p.supporting_evidence || []), ...(p.contradicting_evidence || [])]) {
+            if (evidenceToProps.has(id)) evidenceToProps.get(id).add(p.id);
+          }
+        }
+
+        const nodes = evidence.map((e) => {
+          const prev = state.graph.nodePositions.get(e.id);
+          const intIdx = Number(String(e.interview_id || "").replace(/\D/g, "")) || 1;
+          return {
+            id: e.id,
+            interviewId: e.interview_id,
+            quote: e.quote,
+            tags: new Set((e.tags || []).map((t) => String(t).toLowerCase())),
+            fmo: tokenize(`${e.factor} ${e.mechanism} ${e.outcome}`),
+            propositions: evidenceToProps.get(e.id) || new Set(),
+            x: prev ? prev.x : width / 2 + (Math.random() - 0.5) * 80,
+            y: prev ? prev.y : height / 2 + (Math.random() - 0.5) * 80,
+            vx: prev ? prev.vx : 0,
+            vy: prev ? prev.vy : 0,
+            interviewColor: d3.interpolateTurbo((intIdx % 10) / 10),
+            degree: 0,
+          };
+        });
+
+        const edges = [];
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+
+            const propScore = jaccard(a.propositions, b.propositions);
+            const tagScore = jaccard(a.tags, b.tags);
+            const fmoScore = jaccard(a.fmo, b.fmo);
+            const score = 0.45 * propScore + 0.35 * tagScore + 0.2 * fmoScore;
+            if (score >= 0.7) {
+              edges.push({ source: a.id, target: b.id, score });
+              a.degree += 1;
+              b.degree += 1;
+            }
+          }
+        }
+
+        const size = d3
+          .scaleLinear()
+          .domain([0, Math.max(1, d3.max(nodes, (d) => d.degree) || 1)])
+          .range([5, 13]);
+        nodes.forEach((n) => {
+          n.r = size(n.degree);
+        });
+
+        if (!state.graph.simulation) {
+          state.graph.simulation = d3.forceSimulation(nodes);
+        }
+
+        const simulation = state.graph.simulation;
+        simulation
+          .nodes(nodes)
+          .force("link", d3.forceLink(edges).id((d) => d.id).distance(88).strength(0.35))
+          .force("charge", d3.forceManyBody().strength(-125))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .force("collide", d3.forceCollide().radius((d) => d.r + 4))
+          .alpha(0.9)
+          .restart();
+
+        const link = gLinks
+          .selectAll("line")
+          .data(edges, (d) => `${d.source.id || d.source}-${d.target.id || d.target}`)
+          .join(
+            (enter) =>
+              enter
+                .append("line")
+                .attr("stroke", "#94a3b8")
+                .attr("stroke-opacity", 0.35)
+                .attr("stroke-width", (d) => 1 + d.score * 1.4)
+                .attr("stroke-dasharray", "6,6")
+                .attr("stroke-dashoffset", 30)
+                .call((sel) => sel.transition().duration(500).attr("stroke-dashoffset", 0)),
+            (update) => update,
+            (exit) => exit.remove()
+          );
+
+        const node = gNodes
+          .selectAll("circle")
+          .data(nodes, (d) => d.id)
+          .join(
+            (enter) =>
+              enter
+                .append("circle")
+                .attr("r", (d) => d.r)
+                .attr("fill", (d) => d.interviewColor)
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1.2)
+                .attr("opacity", 0)
+                .call((sel) => sel.transition().duration(500).attr("opacity", 1)),
+            (update) => update,
+            (exit) => exit.remove()
+          );
+
+        node.append("title").text((d) => `${d.id}\n${d.quote}`);
+
+        const overlayData = (project.proposition_store || []).map((p) => ({
+          proposition: p,
+          evidenceIds: p.supporting_evidence || [],
+        }));
+
+        const overlays = gOverlays
+          .selectAll("path")
+          .data(overlayData, (d) => d.proposition.id)
+          .join(
+            (enter) =>
+              enter
+                .append("path")
+                .attr("fill", (d) => propositionColor(d.proposition))
+                .attr("fill-opacity", 0.08)
+                .attr("stroke", (d) => propositionColor(d.proposition))
+                .attr("stroke-opacity", 0.35)
+                .attr("stroke-width", 1.2),
+            (update) => update,
+            (exit) => exit.remove()
+          );
+
+        simulation.on("tick", () => {
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          node.attr("cx", (d) => d.x).attr("cy", (d) => d.y).attr("r", (d) => d.r);
+
+          const nodeById = new Map(nodes.map((n) => [n.id, n]));
+          overlays.attr("d", (d) => {
+            const points = d.evidenceIds
+              .map((id) => nodeById.get(id))
+              .filter(Boolean)
+              .map((n) => [n.x, n.y]);
+
+            if (!points.length) return "";
+            if (points.length === 1) {
+              const [x, y] = points[0];
+              const r = 18;
+              return `M ${x - r},${y} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
+            }
+            if (points.length === 2) {
+              const cx = (points[0][0] + points[1][0]) / 2;
+              const cy = (points[0][1] + points[1][1]) / 2;
+              const dx = points[0][0] - points[1][0];
+              const dy = points[0][1] - points[1][1];
+              const r = Math.max(16, Math.sqrt(dx * dx + dy * dy) / 2 + 8);
+              return `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
+            }
+            const hull = d3.polygonHull(points);
+            if (!hull) return "";
+            return `M ${hull.map((p) => `${p[0]},${p[1]}`).join(" L ")} Z`;
+          });
+
+          for (const n of nodes) {
+            state.graph.nodePositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy });
+          }
+        });
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      let reloadTimer = null;
+      function scheduleReload() {
+        if (!state.selectedProjectId) return;
+        if (reloadTimer) clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(async () => {
+          await loadProject(state.selectedProjectId, true);
+          await refreshCards();
+        }, 300);
+      }
+
+      function connectSSE() {
+        if (!state.selectedProjectId) return;
+        disconnectSSE();
+
+        const projectId = state.selectedProjectId;
+        const source = new EventSource(`/api/projects/${encodeURIComponent(projectId)}/stream`);
+        state.sse = source;
+
+        source.onopen = () => {
+          state.sseConnected = true;
+          setStatus(els.controlStatus, `SSE connected for ${projectId}`);
+        };
+        source.onerror = () => {
+          state.sseConnected = false;
+          setStatus(els.controlStatus, "SSE unavailable, polling every 10s", true);
+        };
+
+        [
+          "new_evidence",
+          "proposition_updated",
+          "new_proposition",
+          "script_updated",
+          "project_status",
+          "project_stats",
+          "report_ready",
+          "report_stale",
+        ].forEach((eventName) => {
+          source.addEventListener(eventName, () => scheduleReload());
+        });
+      }
+
+      function disconnectSSE() {
+        if (state.sse) {
+          state.sse.close();
+        }
+        state.sse = null;
+        state.sseConnected = false;
+      }
+
+      function ensurePolling() {
+        if (state.pollingTimer) return;
+        state.pollingTimer = setInterval(async () => {
+          if (!state.selectedProjectId) return;
+          if (state.sseConnected) return;
+          await loadProject(state.selectedProjectId, true);
+          await refreshCards();
+        }, 10000);
+      }
+
+      els.createProjectBtn.onclick = async () => {
+        const question = els.researchQuestion.value.trim();
+        if (!question) {
+          setStatus(els.createStatus, "Research question is required", true);
+          return;
+        }
         try {
           const result = await api("/api/projects", {
             method: "POST",
-            body: JSON.stringify({ id, research_question: question, initial_angles: angles }),
+            body: JSON.stringify({ research_question: question }),
           });
-          setStatus(status, JSON.stringify(result));
-          await refreshProjects();
-          projectSelect.value = id;
+          setStatus(els.createStatus, `Created project: ${result.project_id}`);
+          state.selectedProjectId = result.project_id;
+          await refreshCards();
+          await loadProject(result.project_id);
+          connectSSE();
         } catch (err) {
-          setStatus(status, err.message, true);
+          setStatus(els.createStatus, err.message, true);
         }
       };
 
-      document.getElementById("refreshProjectsBtn").onclick = refreshProjects;
-
-      document.getElementById("startBtn").onclick = async () => {
-        const status = document.getElementById("startStatus");
-        const id = projectSelect.value;
-        const agentId = document.getElementById("agentId").value.trim();
-        if (!id) {
-          setStatus(status, "Select project first", true);
+      els.startBtn.onclick = async () => {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select/create a project first", true);
           return;
         }
         try {
-          const result = await api(`/api/projects/${encodeURIComponent(id)}/start`, {
+          const agentId = els.agentId.value.trim();
+          const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
+          const result = await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
             method: "POST",
-            body: JSON.stringify(agentId ? { elevenlabs_agent_id: agentId } : {}),
+            body: JSON.stringify(payload),
           });
-          lastStartResponse = result;
-          setStatus(status, JSON.stringify(result, null, 2));
+          setStatus(els.controlStatus, `Started project ${result.project_id}`);
+          await loadProject(state.selectedProjectId, true);
+          await refreshCards();
+          connectSSE();
         } catch (err) {
-          setStatus(status, err.message, true);
+          setStatus(els.controlStatus, err.message, true);
         }
       };
 
-      document.getElementById("openTalkBtn").onclick = () => {
-        const link = lastStartResponse && lastStartResponse.talk_to_link;
-        if (link) {
-          window.open(link, "_blank");
-        } else {
-          alert("No talk_to_link yet. Start project with agent first.");
-        }
-      };
-
-      document.getElementById("loadStateBtn").onclick = async () => {
-        const status = document.getElementById("stateStatus");
-        const dump = document.getElementById("stateDump");
-        const id = projectSelect.value;
-        if (!id) {
-          setStatus(status, "Select project first", true);
+      els.finishBtn.onclick = async () => {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select/create a project first", true);
           return;
         }
         try {
-          const result = await api(`/api/projects/${encodeURIComponent(id)}`);
-          setStatus(status, `loaded: ${id}`);
-          dump.textContent = JSON.stringify(result, null, 2);
-        } catch (err) {
-          setStatus(status, err.message, true);
-        }
-      };
-
-      document.getElementById("simulateBtn").onclick = async () => {
-        const status = document.getElementById("simulateStatus");
-        const id = projectSelect.value;
-        const transcript = document.getElementById("simulateTranscript").value.trim();
-        if (!id) {
-          setStatus(status, "Select project first", true);
-          return;
-        }
-        try {
-          const result = await api(`/api/projects/${encodeURIComponent(id)}/simulate`, {
-            method: "POST",
-            body: JSON.stringify({ transcript }),
-          });
-          setStatus(status, JSON.stringify(result, null, 2));
-        } catch (err) {
-          setStatus(status, err.message, true);
-        }
-      };
-
-      document.getElementById("synthesizeBtn").onclick = async () => {
-        const status = document.getElementById("stateStatus");
-        const id = projectSelect.value;
-        if (!id) {
-          setStatus(status, "Select project first", true);
-          return;
-        }
-        try {
-          const result = await api(`/api/projects/${encodeURIComponent(id)}/synthesize`, {
+          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, {
             method: "POST",
           });
-          setStatus(status, `report saved: ${result.report_path}`);
+          setStatus(els.controlStatus, "Generating report in background...");
+          await loadProject(state.selectedProjectId, true);
+          await refreshCards();
         } catch (err) {
-          setStatus(status, err.message, true);
+          setStatus(els.controlStatus, err.message, true);
         }
       };
 
-      document.getElementById("connectSseBtn").onclick = () => {
-        const status = document.getElementById("sseStatus");
-        const dump = document.getElementById("sseDump");
-        const id = projectSelect.value;
-        if (!id) {
-          setStatus(status, "Select project first", true);
-          return;
+      els.reloadBtn.onclick = async () => {
+        if (!state.selectedProjectId) return;
+        await loadProject(state.selectedProjectId);
+        await refreshCards();
+      };
+
+      els.connectSseBtn.onclick = connectSSE;
+      els.disconnectSseBtn.onclick = () => {
+        disconnectSSE();
+        setStatus(els.controlStatus, "SSE disconnected; polling fallback enabled");
+      };
+
+      els.rawToggle.onchange = () => {
+        if (state.selectedProject) {
+          renderReport(state.selectedProject);
         }
-        if (sse) sse.close();
-        sse = new EventSource(`/api/projects/${encodeURIComponent(id)}/stream`);
-
-        sse.onopen = () => setStatus(status, `SSE connected: ${id}`);
-        sse.onerror = () => setStatus(status, "SSE error (will auto-retry)", true);
-        sse.onmessage = (evt) => {
-          dump.textContent += `message ${evt.data}\n`;
-        };
-
-        ["new_evidence", "proposition_updated", "new_proposition", "script_updated", "ping"].forEach((eventName) => {
-          sse.addEventListener(eventName, (evt) => {
-            dump.textContent += `[${eventName}] ${evt.data}\n`;
-            dump.scrollTop = dump.scrollHeight;
-          });
-        });
       };
 
-      document.getElementById("disconnectSseBtn").onclick = () => {
-        const status = document.getElementById("sseStatus");
-        if (sse) {
-          sse.close();
-          sse = null;
+      els.refreshCardsBtn.onclick = refreshCards;
+
+      async function boot() {
+        await checkHealth();
+        await refreshCards();
+
+        if (state.selectedProjectId) {
+          await loadProject(state.selectedProjectId, true);
+          connectSSE();
         }
-        setStatus(status, "SSE disconnected");
-      };
+        ensurePolling();
+      }
 
-      document.getElementById("clearEventsBtn").onclick = () => {
-        document.getElementById("sseDump").textContent = "";
-      };
-
-      checkHealth();
-      refreshProjects();
+      boot();
     </script>
   </body>
 </html>

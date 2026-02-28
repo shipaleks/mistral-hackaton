@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from uuid import uuid4
+import io
+import re
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import qrcode
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from agents.designer import DesignerAgent
@@ -14,6 +18,7 @@ from api.deps import (
     get_pipeline,
     get_project_service,
     get_settings,
+    get_sse_manager,
     get_synthesizer_agent,
 )
 from config import Settings
@@ -27,6 +32,7 @@ from services.project_service import (
     ProjectNotFoundError,
     ProjectService,
 )
+from services.sse_manager import SSEManager
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -35,7 +41,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 class ProjectCreateRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(min_length=1)
+    id: str | None = None
     research_question: str = Field(min_length=1)
     initial_angles: list[str] = Field(default_factory=list)
 
@@ -58,14 +64,121 @@ class SynthesizeResponse(BaseModel):
     report_path: str
 
 
+class ProjectReportResponse(BaseModel):
+    status: str
+    report_markdown: str | None
+    report_generated_at: str | None
+    report_stale: bool
+
+
+def _slugify(text: str) -> str:
+    value = re.sub(r"[^a-zA-Z0-9\s-]", "", text).strip().lower()
+    value = re.sub(r"\s+", "-", value)
+    value = re.sub(r"-+", "-", value)
+    return value[:40] or "research"
+
+
+def _generate_project_id(question: str) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"{_slugify(question)}-{ts}"
+
+
+def _project_stats(project: ProjectState) -> dict:
+    return {
+        "project_id": project.id,
+        "status": project.status,
+        "participants": len(project.interview_store),
+        "interviews_count": len(project.interview_store),
+        "evidence_count": len(project.evidence_store),
+        "propositions_count": len(project.proposition_store),
+        "active_propositions_count": len(
+            [p for p in project.proposition_store if p.status not in {"weak", "merged"}]
+        ),
+        "convergence_score": project.metrics.convergence_score,
+        "novelty_rate": project.metrics.novelty_rate,
+        "mode": project.metrics.mode,
+        "report_stale": project.report_stale,
+    }
+
+
+async def _generate_report_task(
+    project_id: str,
+    project_service: ProjectService,
+    synthesizer: SynthesizerAgent,
+    sse: SSEManager,
+) -> None:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError:
+        return
+
+    try:
+        report = await synthesizer.synthesize(project)
+    except Exception as err:
+        project.status = "running"
+        project_service.save_project(project)
+        await sse.emit(
+            project_id,
+            "project_status",
+            {
+                "project_id": project.id,
+                "status": project.status,
+                "report_stale": project.report_stale,
+                "error": str(err),
+            },
+        )
+        return
+
+    report_path = Path(project_service.data_dir / project_id / "report.md")
+    report_path.write_text(report, encoding="utf-8")
+
+    project.report_markdown = report
+    project.report_generated_at = datetime.now(timezone.utc)
+    project.report_stale = False
+    if project.finished_at is None:
+        project.finished_at = datetime.now(timezone.utc)
+    project.status = "done"
+    project_service.save_project(project)
+
+    await sse.emit(
+        project_id,
+        "report_ready",
+        {
+            "project_id": project.id,
+            "status": project.status,
+            "report_generated_at": project.report_generated_at.isoformat()
+            if project.report_generated_at
+            else None,
+            "report_stale": project.report_stale,
+            "report_path": str(report_path),
+        },
+    )
+    await sse.emit(
+        project_id,
+        "project_status",
+        {
+            "project_id": project.id,
+            "status": project.status,
+            "report_stale": project.report_stale,
+        },
+    )
+    await sse.emit(project_id, "project_stats", _project_stats(project))
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_project(
     payload: ProjectCreateRequest,
     project_service: ProjectService = Depends(get_project_service),
 ) -> dict[str, str]:
+    requested_id = payload.id.strip() if isinstance(payload.id, str) else ""
+    project_id = requested_id or _generate_project_id(payload.research_question)
+
+    if project_service.exists(project_id):
+        project_id = f"{project_id}-{uuid4().hex[:6]}"
+
     try:
         project = project_service.create_project(
-            project_id=payload.id,
+            project_id=project_id,
             research_question=payload.research_question,
             initial_angles=payload.initial_angles,
         )
@@ -80,6 +193,13 @@ def list_projects(
     project_service: ProjectService = Depends(get_project_service),
 ) -> dict[str, list[str]]:
     return {"projects": project_service.list_projects()}
+
+
+@router.get("/cards", status_code=status.HTTP_200_OK)
+def list_project_cards(
+    project_service: ProjectService = Depends(get_project_service),
+) -> list[dict]:
+    return project_service.list_project_cards()
 
 
 @router.get("/{project_id}", response_model=ProjectState)
@@ -129,6 +249,26 @@ def get_scripts(
     return [item.model_dump(mode="json") for item in project.script_versions]
 
 
+@router.get("/{project_id}/report", response_model=ProjectReportResponse)
+def get_report(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+) -> ProjectReportResponse:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+    return ProjectReportResponse(
+        status=project.status,
+        report_markdown=project.report_markdown,
+        report_generated_at=(
+            project.report_generated_at.isoformat() if project.report_generated_at else None
+        ),
+        report_stale=project.report_stale,
+    )
+
+
 @router.post("/{project_id}/start", status_code=status.HTTP_200_OK)
 async def start_project(
     project_id: str,
@@ -137,6 +277,7 @@ async def start_project(
     designer: DesignerAgent = Depends(get_designer_agent),
     elevenlabs: ElevenLabsService = Depends(get_elevenlabs_service),
     settings: Settings = Depends(get_settings),
+    sse: SSEManager = Depends(get_sse_manager),
 ) -> dict:
     try:
         project = project_service.load_project(project_id)
@@ -166,7 +307,6 @@ async def start_project(
             version=1,
         )
 
-    # Ensure proposition IDs are stable.
     proposition_ids = set()
     fixed: list[Proposition] = []
     next_idx = len(project.proposition_store) + 1
@@ -193,6 +333,7 @@ async def start_project(
                 status="untested",
             )
         ]
+
     project.metrics.mode = script.mode
     project.metrics.convergence_score = script.convergence_score
     project.metrics.novelty_rate = script.novelty_rate
@@ -217,9 +358,11 @@ async def start_project(
     agent_id = payload.elevenlabs_agent_id or project.elevenlabs_agent_id or settings.elevenlabs_agent_id
     if agent_id:
         project.elevenlabs_agent_id = agent_id
+        project.talk_to_link = elevenlabs.get_talk_to_link(agent_id)
 
     project.sync_pending = False
     project.sync_pending_script_version = None
+    project.status = "running"
 
     if project.elevenlabs_agent_id:
         prompt = designer.build_interviewer_prompt(script)
@@ -231,16 +374,94 @@ async def start_project(
 
     project_service.save_project(project)
 
+    await sse.emit(
+        project.id,
+        "project_status",
+        {
+            "project_id": project.id,
+            "status": project.status,
+            "report_stale": project.report_stale,
+            "sync_pending": project.sync_pending,
+        },
+    )
+    await sse.emit(project.id, "project_stats", _project_stats(project))
+
     response = {
         "project_id": project.id,
         "status": "started",
         "script_version": script.version,
         "propositions": len(project.proposition_store),
         "sync_pending": project.sync_pending,
+        "project_status": project.status,
     }
-    if project.elevenlabs_agent_id:
-        response["talk_to_link"] = elevenlabs.get_talk_to_link(project.elevenlabs_agent_id)
+    if project.talk_to_link:
+        response["talk_to_link"] = project.talk_to_link
     return response
+
+
+@router.post("/{project_id}/finish", status_code=status.HTTP_202_ACCEPTED)
+async def finish_project(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    project_service: ProjectService = Depends(get_project_service),
+    synthesizer: SynthesizerAgent = Depends(get_synthesizer_agent),
+    sse: SSEManager = Depends(get_sse_manager),
+) -> dict:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+    project.status = "reporting"
+    if project.finished_at is None:
+        project.finished_at = datetime.now(timezone.utc)
+    project_service.save_project(project)
+
+    await sse.emit(
+        project.id,
+        "project_status",
+        {
+            "project_id": project.id,
+            "status": project.status,
+            "report_stale": project.report_stale,
+        },
+    )
+
+    background_tasks.add_task(_generate_report_task, project.id, project_service, synthesizer, sse)
+
+    return {
+        "project_id": project.id,
+        "status": "reporting",
+        "message": "Report generation started",
+    }
+
+
+@router.get("/{project_id}/qrcode", status_code=status.HTTP_200_OK)
+def get_qrcode(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    elevenlabs: ElevenLabsService = Depends(get_elevenlabs_service),
+) -> Response:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+    talk_to_link = project.talk_to_link
+    if not talk_to_link and project.elevenlabs_agent_id:
+        talk_to_link = elevenlabs.get_talk_to_link(project.elevenlabs_agent_id)
+
+    if not talk_to_link:
+        raise HTTPException(status_code=400, detail="talk_to_link is not available for this project")
+
+    qr = qrcode.QRCode(border=2, box_size=8)
+    qr.add_data(talk_to_link)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
 
 
 @router.post("/{project_id}/simulate", status_code=status.HTTP_200_OK)
@@ -263,6 +484,7 @@ async def synthesize(
     project_id: str,
     project_service: ProjectService = Depends(get_project_service),
     synthesizer: SynthesizerAgent = Depends(get_synthesizer_agent),
+    sse: SSEManager = Depends(get_sse_manager),
 ) -> SynthesizeResponse:
     try:
         project = project_service.load_project(project_id)
@@ -272,6 +494,26 @@ async def synthesize(
     report = await synthesizer.synthesize(project)
     report_path = Path(project_service.data_dir / project_id / "report.md")
     report_path.write_text(report, encoding="utf-8")
+
+    project.report_markdown = report
+    project.report_generated_at = datetime.now(timezone.utc)
+    project.report_stale = False
+    if project.finished_at is None:
+        project.finished_at = datetime.now(timezone.utc)
+    project.status = "done"
+    project_service.save_project(project)
+
+    await sse.emit(
+        project.id,
+        "report_ready",
+        {
+            "project_id": project.id,
+            "status": project.status,
+            "report_generated_at": project.report_generated_at.isoformat(),
+            "report_stale": project.report_stale,
+            "report_path": str(report_path),
+        },
+    )
 
     return SynthesizeResponse(report=report, report_path=str(report_path))
 

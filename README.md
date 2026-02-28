@@ -17,11 +17,16 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 Open:
 - API docs: `http://localhost:8000/docs`
 - Health: `http://localhost:8000/health`
+- Demo UI: `http://localhost:8000/ui`
 
 ## Key endpoints
 
 - `POST /api/projects`
+- `GET /api/projects/cards`
 - `POST /api/projects/{id}/start`
+- `POST /api/projects/{id}/finish`
+- `GET /api/projects/{id}/report`
+- `GET /api/projects/{id}/qrcode`
 - `POST /api/webhook/elevenlabs`
 - `GET /api/projects/{id}`
 - `GET /api/projects/{id}/stream`

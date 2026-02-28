@@ -5,10 +5,7 @@ from typing import Any
 from agents.analyst import AnalystAgent
 from agents.designer import DesignerAgent
 from models.analysis import AnalysisResult
-from models.evidence import Evidence
 from models.interview import Interview
-from models.proposition import Proposition
-from models.script import InterviewScript
 from services.elevenlabs_service import ElevenLabsService
 from services.project_service import ProjectService
 from services.sse_manager import SSEManager
@@ -40,6 +37,11 @@ class Pipeline:
 
         if conversation_id in project.processed_conversation_ids:
             return {"status": "duplicate", "conversation_id": conversation_id}
+
+        if project.status == "draft":
+            project.status = "running"
+
+        report_became_stale = project.status == "done"
 
         interview = Interview(
             id=self.project_service.next_interview_id(project),
@@ -98,6 +100,9 @@ class Pipeline:
                 project.sync_pending = True
                 project.sync_pending_script_version = new_script.version
 
+        if report_became_stale:
+            project.report_stale = True
+
         project.processed_conversation_ids.append(conversation_id)
         self.project_service.save_project(project)
 
@@ -111,12 +116,38 @@ class Pipeline:
             },
         )
 
+        if report_became_stale:
+            await self.sse.emit(
+                project_id,
+                "report_stale",
+                {
+                    "project_id": project.id,
+                    "status": project.status,
+                    "report_stale": True,
+                },
+            )
+
+        await self.sse.emit(
+            project_id,
+            "project_status",
+            {
+                "project_id": project.id,
+                "status": project.status,
+                "report_stale": project.report_stale,
+                "sync_pending": project.sync_pending,
+            },
+        )
+
+        await self.sse.emit(project_id, "project_stats", self._build_project_stats(project))
+
         return {
             "status": "processed",
             "conversation_id": conversation_id,
             "interview_id": interview.id,
             "script_version": new_script.version,
             "sync_pending": project.sync_pending,
+            "project_status": project.status,
+            "report_stale": project.report_stale,
         }
 
     def _apply_analysis_result(self, project, result: AnalysisResult) -> None:
@@ -176,3 +207,20 @@ class Pipeline:
 
         for new_prop in result.new_propositions:
             await self.sse.emit(project_id, "new_proposition", new_prop.model_dump(mode="json"))
+
+    def _build_project_stats(self, project) -> dict[str, Any]:
+        return {
+            "project_id": project.id,
+            "status": project.status,
+            "participants": len(project.interview_store),
+            "interviews_count": len(project.interview_store),
+            "evidence_count": len(project.evidence_store),
+            "propositions_count": len(project.proposition_store),
+            "active_propositions_count": len(
+                [p for p in project.proposition_store if p.status not in {"weak", "merged"}]
+            ),
+            "convergence_score": project.metrics.convergence_score,
+            "novelty_rate": project.metrics.novelty_rate,
+            "mode": project.metrics.mode,
+            "report_stale": project.report_stale,
+        }
