@@ -72,4 +72,4 @@ class ElevenLabsService:
 
     @staticmethod
     def get_talk_to_link(agent_id: str) -> str:
-        return f"https://elevenlabs.io/app/talk-to/{agent_id}"
+        return f"https://elevenlabs.io/app/talk-to?agent_id={agent_id}"
