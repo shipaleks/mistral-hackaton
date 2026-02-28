@@ -1,0 +1,14 @@
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+dashboard/build/
+dashboard/dist/
+data/projects/*/
+!data/projects/.gitkeep
+.DS_Store

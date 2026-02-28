@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eidetic Projects</title>
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --accent: #0f766e;
+        --accent-soft: #ccfbf1;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        color: var(--text);
+        background: linear-gradient(180deg, #f3f4f6 0%, #f9fafb 100%);
+      }
+      .page {
+        max-width: 1100px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .title {
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      }
+      .card h3 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      label {
+        display: block;
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input, textarea, select {
+        width: 100%;
+        margin-top: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 14px;
+        background: #fff;
+      }
+      textarea { min-height: 100px; resize: vertical; }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.soft {
+        background: var(--accent-soft);
+        border-color: #99f6e4;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--muted);
+        white-space: pre-wrap;
+      }
+      .status.error { color: var(--danger); }
+      pre {
+        margin: 10px 0 0;
+        background: #111827;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 12px;
+        max-height: 280px;
+        overflow: auto;
+      }
+      .footer {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #ecfeff;
+        border: 1px solid #a5f3fc;
+        color: #155e75;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <div>
+          <div class="title">Eidetic Control Panel</div>
+          <div class="subtitle">Minimal UI for project lifecycle and webhook pipeline checks</div>
+        </div>
+        <div class="pill" id="healthBadge">health: unknown</div>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <h3>1) Create Project</h3>
+          <label>Project ID<input id="createId" value="hackathon-demo" /></label>
+          <label>Research question<textarea id="createQuestion">What is your experience with this hackathon so far?</textarea></label>
+          <label>Initial angles (comma separated)<input id="createAngles" value="organization, food, mentors, difficulty, team formation, time pressure" /></label>
+          <div class="row">
+            <button class="primary" id="createBtn">Create</button>
+          </div>
+          <div class="status" id="createStatus"></div>
+        </section>
+
+        <section class="card">
+          <h3>2) Select & Start</h3>
+          <label>Existing projects<select id="projectSelect"></select></label>
+          <label>ElevenLabs agent ID (optional override)<input id="agentId" placeholder="agent_xxx" /></label>
+          <div class="row">
+            <button class="soft" id="refreshProjectsBtn">Refresh</button>
+            <button class="primary" id="startBtn">Start Project</button>
+            <button id="openTalkBtn">Open Talk Link</button>
+          </div>
+          <div class="status" id="startStatus"></div>
+        </section>
+
+        <section class="card">
+          <h3>3) Inspect State</h3>
+          <div class="row">
+            <button class="soft" id="loadStateBtn">Load Project State</button>
+            <button id="synthesizeBtn">Synthesize Report</button>
+          </div>
+          <div class="status" id="stateStatus"></div>
+          <pre id="stateDump">{}</pre>
+        </section>
+
+        <section class="card">
+          <h3>4) Simulate Interview (local smoke)</h3>
+          <label>Transcript<textarea id="simulateTranscript">User: Time pressure helped us focus. We cut scope early.</textarea></label>
+          <div class="row">
+            <button class="primary" id="simulateBtn">Send Simulated Interview</button>
+          </div>
+          <div class="status" id="simulateStatus"></div>
+        </section>
+
+        <section class="card" style="grid-column: 1 / -1;">
+          <h3>5) SSE Events</h3>
+          <div class="row">
+            <button class="soft" id="connectSseBtn">Connect SSE</button>
+            <button id="disconnectSseBtn">Disconnect SSE</button>
+            <button id="clearEventsBtn">Clear</button>
+          </div>
+          <div class="status" id="sseStatus"></div>
+          <pre id="sseDump"></pre>
+        </section>
+      </div>
+
+      <div class="footer">
+        API base is current origin. Webhook callback for ElevenLabs must be: <code>/api/webhook/elevenlabs</code>.
+      </div>
+    </div>
+
+    <script>
+      const healthBadge = document.getElementById("healthBadge");
+      const projectSelect = document.getElementById("projectSelect");
+      let lastStartResponse = null;
+      let sse = null;
+
+      function setStatus(el, value, isError = false) {
+        el.textContent = value;
+        el.classList.toggle("error", isError);
+      }
+
+      async function api(path, options = {}) {
+        const resp = await fetch(path, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await resp.text();
+        let body;
+        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        if (!resp.ok) {
+          throw new Error(`${resp.status} ${resp.statusText}: ${typeof body === "string" ? body : JSON.stringify(body)}`);
+        }
+        return body;
+      }
+
+      async function checkHealth() {
+        try {
+          const result = await api("/health");
+          healthBadge.textContent = `health: ${result.status}`;
+        } catch (err) {
+          healthBadge.textContent = "health: down";
+        }
+      }
+
+      async function refreshProjects() {
+        const status = document.getElementById("startStatus");
+        try {
+          const result = await api("/api/projects");
+          const projects = result.projects || [];
+          projectSelect.innerHTML = "";
+          for (const id of projects) {
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = id;
+            projectSelect.appendChild(opt);
+          }
+          if (projects.length === 0) {
+            const opt = document.createElement("option");
+            opt.textContent = "(none)";
+            opt.value = "";
+            projectSelect.appendChild(opt);
+          }
+          setStatus(status, `projects: ${projects.join(", ") || "none"}`);
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      }
+
+      document.getElementById("createBtn").onclick = async () => {
+        const status = document.getElementById("createStatus");
+        const id = document.getElementById("createId").value.trim();
+        const question = document.getElementById("createQuestion").value.trim();
+        const angles = document.getElementById("createAngles").value.split(",").map(s => s.trim()).filter(Boolean);
+        try {
+          const result = await api("/api/projects", {
+            method: "POST",
+            body: JSON.stringify({ id, research_question: question, initial_angles: angles }),
+          });
+          setStatus(status, JSON.stringify(result));
+          await refreshProjects();
+          projectSelect.value = id;
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      };
+
+      document.getElementById("refreshProjectsBtn").onclick = refreshProjects;
+
+      document.getElementById("startBtn").onclick = async () => {
+        const status = document.getElementById("startStatus");
+        const id = projectSelect.value;
+        const agentId = document.getElementById("agentId").value.trim();
+        if (!id) {
+          setStatus(status, "Select project first", true);
+          return;
+        }
+        try {
+          const result = await api(`/api/projects/${encodeURIComponent(id)}/start`, {
+            method: "POST",
+            body: JSON.stringify(agentId ? { elevenlabs_agent_id: agentId } : {}),
+          });
+          lastStartResponse = result;
+          setStatus(status, JSON.stringify(result, null, 2));
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      };
+
+      document.getElementById("openTalkBtn").onclick = () => {
+        const link = lastStartResponse && lastStartResponse.talk_to_link;
+        if (link) {
+          window.open(link, "_blank");
+        } else {
+          alert("No talk_to_link yet. Start project with agent first.");
+        }
+      };
+
+      document.getElementById("loadStateBtn").onclick = async () => {
+        const status = document.getElementById("stateStatus");
+        const dump = document.getElementById("stateDump");
+        const id = projectSelect.value;
+        if (!id) {
+          setStatus(status, "Select project first", true);
+          return;
+        }
+        try {
+          const result = await api(`/api/projects/${encodeURIComponent(id)}`);
+          setStatus(status, `loaded: ${id}`);
+          dump.textContent = JSON.stringify(result, null, 2);
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      };
+
+      document.getElementById("simulateBtn").onclick = async () => {
+        const status = document.getElementById("simulateStatus");
+        const id = projectSelect.value;
+        const transcript = document.getElementById("simulateTranscript").value.trim();
+        if (!id) {
+          setStatus(status, "Select project first", true);
+          return;
+        }
+        try {
+          const result = await api(`/api/projects/${encodeURIComponent(id)}/simulate`, {
+            method: "POST",
+            body: JSON.stringify({ transcript }),
+          });
+          setStatus(status, JSON.stringify(result, null, 2));
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      };
+
+      document.getElementById("synthesizeBtn").onclick = async () => {
+        const status = document.getElementById("stateStatus");
+        const id = projectSelect.value;
+        if (!id) {
+          setStatus(status, "Select project first", true);
+          return;
+        }
+        try {
+          const result = await api(`/api/projects/${encodeURIComponent(id)}/synthesize`, {
+            method: "POST",
+          });
+          setStatus(status, `report saved: ${result.report_path}`);
+        } catch (err) {
+          setStatus(status, err.message, true);
+        }
+      };
+
+      document.getElementById("connectSseBtn").onclick = () => {
+        const status = document.getElementById("sseStatus");
+        const dump = document.getElementById("sseDump");
+        const id = projectSelect.value;
+        if (!id) {
+          setStatus(status, "Select project first", true);
+          return;
+        }
+        if (sse) sse.close();
+        sse = new EventSource(`/api/projects/${encodeURIComponent(id)}/stream`);
+
+        sse.onopen = () => setStatus(status, `SSE connected: ${id}`);
+        sse.onerror = () => setStatus(status, "SSE error (will auto-retry)", true);
+        sse.onmessage = (evt) => {
+          dump.textContent += `message ${evt.data}\n`;
+        };
+
+        ["new_evidence", "proposition_updated", "new_proposition", "script_updated", "ping"].forEach((eventName) => {
+          sse.addEventListener(eventName, (evt) => {
+            dump.textContent += `[${eventName}] ${evt.data}\n`;
+            dump.scrollTop = dump.scrollHeight;
+          });
+        });
+      };
+
+      document.getElementById("disconnectSseBtn").onclick = () => {
+        const status = document.getElementById("sseStatus");
+        if (sse) {
+          sse.close();
+          sse = null;
+        }
+        setStatus(status, "SSE disconnected");
+      };
+
+      document.getElementById("clearEventsBtn").onclick = () => {
+        document.getElementById("sseDump").textContent = "";
+      };
+
+      checkHealth();
+      refreshProjects();
+    </script>
+  </body>
+</html>
