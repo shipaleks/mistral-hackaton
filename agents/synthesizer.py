@@ -70,16 +70,18 @@ class SynthesizerAgent:
             llm_error = err
             print(f"[synthesizer] llm generation failed: {err}")
 
-        if llm_report and self._is_grounded(llm_report, project) and not self._has_non_english_quotes(
-            llm_report
-        ):
+        grounding_issue = self._grounding_issue(llm_report, project) if llm_report else None
+        if llm_report and grounding_issue is None:
             return {
                 "report": llm_report,
                 "is_fallback": False,
                 "fallback_reason": None,
             }
 
-        reason = self._format_fallback_reason(llm_error)
+        if llm_report and grounding_issue:
+            print(f"[synthesizer] llm output rejected: {grounding_issue}")
+
+        reason = self._format_fallback_reason(llm_error, grounding_issue)
         return {
             "report": self._grounded_fallback_report(project, reason, quote_translations),
             "is_fallback": True,
@@ -87,30 +89,35 @@ class SynthesizerAgent:
         }
 
     def _is_grounded(self, report: str, project: ProjectState) -> bool:
+        return self._grounding_issue(report, project) is None
+
+    def _grounding_issue(self, report: str, project: ProjectState) -> str | None:
         text = report or ""
         if re.search(r"\bParticipant\s+[A-Z]\b", text):
-            return False
+            return "contains invented participant labels"
 
         evidence_quotes = [self._norm(e.quote) for e in project.evidence_store if e.quote.strip()]
         if not evidence_quotes:
-            return False
+            return "no evidence quotes available for grounding"
 
         original_markers = self._extract_original_markers(text)
         if original_markers:
             for original in original_markers:
                 if not self._matches_any_evidence_quote(original, evidence_quotes):
-                    return False
-            return True
+                    return "contains [original] quote not found in evidence store"
+        else:
+            quote_candidates = re.findall(r"[\"“](.*?)[\"”]", text, flags=re.DOTALL)
+            for candidate in quote_candidates:
+                norm_candidate = self._norm(candidate)
+                if len(norm_candidate) < 10:
+                    continue
+                if not self._matches_any_evidence_quote(norm_candidate, evidence_quotes):
+                    return "contains quoted text not found in evidence store"
 
-        quote_candidates = re.findall(r"[\"“](.*?)[\"”]", text, flags=re.DOTALL)
-        for candidate in quote_candidates:
-            norm_candidate = self._norm(candidate)
-            if len(norm_candidate) < 10:
-                continue
-            if not self._matches_any_evidence_quote(norm_candidate, evidence_quotes):
-                return False
+        if self._has_non_english_quotes(text):
+            return "contains non-English text outside [original] markers"
 
-        return True
+        return None
 
     def _matches_any_evidence_quote(
         self,
@@ -126,24 +133,29 @@ class SynthesizerAgent:
         )
 
     def _extract_original_markers(self, report: str) -> list[str]:
-        matches = re.findall(r"\[original:\s*\"(.*?)\"\s*\]", report, flags=re.IGNORECASE | re.DOTALL)
-        matches.extend(
-            re.findall(r"\[original:\s*'(.*?)'\s*\]", report, flags=re.IGNORECASE | re.DOTALL)
-        )
-        return [m.strip() for m in matches if m and m.strip()]
+        blocks = re.findall(r"\[original:\s*(.*?)\]", report, flags=re.IGNORECASE | re.DOTALL)
+        values: list[str] = []
+        for block in blocks:
+            candidate = str(block).strip()
+            if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {"'", '"'}:
+                candidate = candidate[1:-1].strip()
+            if candidate:
+                values.append(candidate)
+        return values
 
     def _has_non_english_quotes(self, report: str) -> bool:
-        cleaned = re.sub(
-            r"\[original:\s*(\".*?\"|'.*?')\s*\]",
-            "",
-            report,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
+        cleaned = re.sub(r"\[original:\s*.*?\]", "", report, flags=re.IGNORECASE | re.DOTALL)
         # Reject clearly non-English scripts outside explicit original markers.
         return bool(re.search(r"[А-Яа-яЁё\u3040-\u30ff\u3400-\u9fff]", cleaned))
 
-    def _format_fallback_reason(self, llm_error: Exception | None) -> str:
+    def _format_fallback_reason(
+        self,
+        llm_error: Exception | None,
+        grounding_issue: str | None = None,
+    ) -> str:
         if llm_error is None:
+            if grounding_issue:
+                return f"LLM output was not grounded/safe: {grounding_issue}"
             return "LLM output was not grounded/safe"
 
         detail = str(llm_error).strip() or llm_error.__class__.__name__
