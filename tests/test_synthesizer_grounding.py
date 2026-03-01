@@ -179,6 +179,49 @@ async def test_synthesizer_accepts_translated_quotes_with_original_marker():
 
 
 @pytest.mark.asyncio
+async def test_synthesizer_accepts_minor_original_quote_variation():
+    project = _sample_project()
+    project.interview_store = [
+        Interview(
+            id="INT_001",
+            conversation_id="conv-1",
+            transcript="text",
+            language="ru",
+            metadata={},
+        )
+    ]
+    project.evidence_store = [
+        Evidence(
+            id="E001",
+            interview_id="INT_001",
+            quote="Я почти не спал, вообще почти ни минуты",
+            interpretation="Fatigue impacted performance",
+            factor="time pressure",
+            mechanism="sleep deprivation",
+            outcome="lower focus",
+            tags=["fatigue"],
+            language="ru",
+        )
+    ]
+
+    translated_report = (
+        "## Core Findings\n\n"
+        'The participant described exhaustion: "I barely slept." '
+        '[original: "Я почти не спал вообще почти ни минуты"]'
+    )
+    agent = SynthesizerAgent(
+        DummyLLM(
+            response=translated_report,
+            json_response={"translations": [{"id": "E001", "english": "I barely slept."}]},
+        )
+    )
+
+    report = await agent.synthesize(project)
+
+    assert report == translated_report
+
+
+@pytest.mark.asyncio
 async def test_synthesizer_rejects_non_english_quotes_outside_original_marker():
     project = _sample_project()
     project.interview_store = [

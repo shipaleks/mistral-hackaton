@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from typing import Any
 
 from agents.llm_client import LLMClient
@@ -127,10 +128,32 @@ class SynthesizerAgent:
         norm_candidate = self._norm(quote_or_norm)
         if not norm_candidate:
             return False
-        return any(
-            norm_candidate in evidence_quote or evidence_quote in norm_candidate
-            for evidence_quote in evidence_quotes_norm
-        )
+
+        candidate_len = len(norm_candidate)
+        candidate_tokens = norm_candidate.split()
+        for evidence_quote in evidence_quotes_norm:
+            if norm_candidate in evidence_quote or evidence_quote in norm_candidate:
+                return True
+
+            if len(candidate_tokens) >= 6:
+                token_overlap = self._token_overlap_ratio(norm_candidate, evidence_quote)
+                if token_overlap >= 0.82:
+                    return True
+
+            if candidate_len >= 40 and len(evidence_quote) >= 40:
+                ratio = SequenceMatcher(None, norm_candidate, evidence_quote).ratio()
+                if ratio >= 0.87:
+                    return True
+
+        return False
+
+    def _token_overlap_ratio(self, left: str, right: str) -> float:
+        left_tokens = {token for token in left.split() if token}
+        right_tokens = {token for token in right.split() if token}
+        if not left_tokens or not right_tokens:
+            return 0.0
+        intersection = left_tokens.intersection(right_tokens)
+        return len(intersection) / max(1, min(len(left_tokens), len(right_tokens)))
 
     def _extract_original_markers(self, report: str) -> list[str]:
         blocks = re.findall(r"\[original:\s*(.*?)\]", report, flags=re.IGNORECASE | re.DOTALL)
