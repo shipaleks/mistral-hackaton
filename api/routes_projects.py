@@ -492,6 +492,44 @@ async def finish_project(
     }
 
 
+@router.post("/{project_id}/stop", status_code=status.HTTP_200_OK)
+async def stop_project(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    sse: SSEManager = Depends(get_sse_manager),
+) -> dict:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+
+    if project.status in {"running", "reporting"}:
+        project.status = "done"
+        if project.finished_at is None:
+            project.finished_at = datetime.now(timezone.utc)
+        project_service.save_project(project)
+
+        await sse.emit(
+            project.id,
+            "project_status",
+            {
+                "project_id": project.id,
+                "status": project.status,
+                "report_stale": project.report_stale,
+                "sync_pending": project.sync_pending,
+                "prompt_safety_status": project.prompt_safety_status,
+                "prompt_safety_violations_count": project.prompt_safety_violations_count,
+            },
+        )
+        await sse.emit(project.id, "project_stats", _project_stats(project))
+
+    return {
+        "project_id": project.id,
+        "status": project.status,
+        "message": "Project stopped",
+    }
+
+
 @router.get("/{project_id}/qrcode", status_code=status.HTTP_200_OK)
 def get_qrcode(
     project_id: str,

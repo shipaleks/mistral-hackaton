@@ -189,6 +189,12 @@
         color: #6f5700;
       }
 
+      button.danger {
+        border-color: var(--danger);
+        background: var(--danger-soft);
+        color: #8f1f18;
+      }
+
       button.active {
         border-color: var(--mistral-blue);
         color: #0b57b7;
@@ -510,7 +516,11 @@
               <h2 id="projectTitle">Select or create a project</h2>
               <p class="muted" id="projectQuestion">Research question will appear here.</p>
             </div>
-            <span class="pill" id="projectStatusPill">status: draft</span>
+            <div class="row">
+              <span class="pill" id="projectStatusPill">status: draft</span>
+              <button id="stopBtn">Stop project</button>
+              <button class="danger" id="deleteBtn">Delete project</button>
+            </div>
           </div>
 
           <div class="flow-steps">
@@ -641,6 +651,8 @@
         agentId: document.getElementById("agentId"),
         startBtn: document.getElementById("startBtn"),
         finishBtn: document.getElementById("finishBtn"),
+        stopBtn: document.getElementById("stopBtn"),
+        deleteBtn: document.getElementById("deleteBtn"),
         talkBlock: document.getElementById("talkBlock"),
         talkLink: document.getElementById("talkLink"),
         openTalkBtn: document.getElementById("openTalkBtn"),
@@ -788,6 +800,8 @@
         els.projectQuestion.textContent = project.research_question || "";
         els.projectStatusPill.textContent = `status: ${project.status}`;
         els.projectStatusPill.className = `pill ${statusClass(project.status)}`.trim();
+        els.stopBtn.disabled = !["running", "reporting"].includes(project.status);
+        els.deleteBtn.disabled = false;
 
         renderIngestionHint(project);
         renderTalk(project);
@@ -1527,6 +1541,41 @@
         }
       }
 
+      async function stopProject() {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select or create a project first.", true);
+          return;
+        }
+        try {
+          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/stop`, {
+            method: "POST",
+          });
+          setStatus(els.controlStatus, "Project stopped. Agent is now free for another project.");
+          await loadProject(state.selectedProjectId, { silent: true });
+          await refreshCards({ silent: true });
+        } catch (error) {
+          setStatus(els.controlStatus, error.message, true);
+        }
+      }
+
+      async function deleteProject() {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select or create a project first.", true);
+          return;
+        }
+        const ok = window.confirm(`Delete project '${state.selectedProjectId}'? This cannot be undone.`);
+        if (!ok) return;
+
+        try {
+          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}`, {
+            method: "DELETE",
+          });
+          window.location.reload();
+        } catch (error) {
+          setStatus(els.controlStatus, error.message, true);
+        }
+      }
+
       function switchMode(mode) {
         state.visualMode = mode;
         els.modeHypothesisBtn.classList.toggle("active", mode === "hypothesis");
@@ -1539,6 +1588,8 @@
       els.createProjectBtn.onclick = createProject;
       els.startBtn.onclick = startResearch;
       els.finishBtn.onclick = finishResearch;
+      els.stopBtn.onclick = stopProject;
+      els.deleteBtn.onclick = deleteProject;
       els.modeHypothesisBtn.onclick = () => switchMode("hypothesis");
       els.modeNetworkBtn.onclick = () => switchMode("network");
       els.rawToggle.onchange = () => {

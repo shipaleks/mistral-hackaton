@@ -7,6 +7,7 @@ from api.routes_projects import (
     StartProjectRequest,
     _generate_report_task,
     get_qrcode,
+    stop_project,
     start_project,
 )
 from models.analysis import AnalysisMetrics, AnalysisResult
@@ -263,3 +264,23 @@ async def test_start_project_rejects_agent_used_by_active_project(tmp_path):
 
     assert exc.value.status_code == 409
     assert "already used by active project" in str(exc.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_stop_project_releases_active_status(tmp_path):
+    project_service = ProjectService(tmp_path)
+    project = project_service.create_project("demo", "RQ")
+    project.status = "running"
+    project.elevenlabs_agent_id = "agent_busy"
+    project_service.save_project(project)
+
+    response = await stop_project(
+        project_id="demo",
+        project_service=project_service,
+        sse=SSEManager(),
+    )
+
+    saved = project_service.load_project("demo")
+    assert response["status"] == "done"
+    assert saved.status == "done"
+    assert saved.finished_at is not None
