@@ -68,6 +68,7 @@ class SynthesizerAgent:
             )
         except Exception as err:
             llm_error = err
+            print(f"[synthesizer] llm generation failed: {err}")
 
         if llm_report and self._is_grounded(llm_report, project) and not self._has_non_english_quotes(
             llm_report
@@ -78,7 +79,7 @@ class SynthesizerAgent:
                 "fallback_reason": None,
             }
 
-        reason = "LLM generation failed" if llm_error else "LLM output was not grounded/safe"
+        reason = self._format_fallback_reason(llm_error)
         return {
             "report": self._grounded_fallback_report(project, reason, quote_translations),
             "is_fallback": True,
@@ -140,6 +141,16 @@ class SynthesizerAgent:
         )
         # Reject clearly non-English scripts outside explicit original markers.
         return bool(re.search(r"[А-Яа-яЁё\u3040-\u30ff\u3400-\u9fff]", cleaned))
+
+    def _format_fallback_reason(self, llm_error: Exception | None) -> str:
+        if llm_error is None:
+            return "LLM output was not grounded/safe"
+
+        detail = str(llm_error).strip() or llm_error.__class__.__name__
+        detail = re.sub(r"\s+", " ", detail)
+        if len(detail) > 260:
+            detail = f"{detail[:257]}..."
+        return f"LLM generation failed: {detail}"
 
     async def translate_evidence_quotes(self, evidence_items: list[Evidence]) -> dict[str, str]:
         translations: dict[str, str] = {}

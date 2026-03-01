@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 import httpx
@@ -98,7 +99,8 @@ class LLMClient:
                 async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                     response = await client.post(url, headers=headers, json=payload)
 
-                if response.status_code in {408, 409, 429, 500, 502, 503, 504}:
+                transient_statuses = {408, 409, 429, 500, 502, 503, 504}
+                if response.status_code in transient_statuses:
                     raise httpx.HTTPStatusError(
                         "Transient LLM error",
                         request=response.request,
@@ -107,10 +109,49 @@ class LLMClient:
 
                 response.raise_for_status()
                 return response.json()
-            except (httpx.RequestError, httpx.HTTPStatusError) as err:
-                last_error = err
+            except httpx.HTTPStatusError as err:
+                status_code = err.response.status_code
+                detail = self._response_error_detail(err.response)
+                error_message = f"LLM HTTP {status_code}: {detail}"
+                if status_code not in transient_statuses:
+                    raise RuntimeError(error_message) from err
+                last_error = RuntimeError(error_message)
+                if attempt >= self.max_retries:
+                    break
+                await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+            except httpx.RequestError as err:
+                last_error = RuntimeError(
+                    f"LLM request error: {err.__class__.__name__}: {str(err).strip() or 'unknown'}"
+                )
                 if attempt >= self.max_retries:
                     break
                 await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
 
-        raise RuntimeError("Failed to call LLM") from last_error
+        if last_error is None:
+            raise RuntimeError("Failed to call LLM: unknown error")
+        raise RuntimeError(
+            f"Failed to call LLM after {self.max_retries} attempt(s): {last_error}"
+        ) from last_error
+
+    @staticmethod
+    def _response_error_detail(response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                message = str(error.get("message", "")).strip()
+                if message:
+                    return message
+            message = str(payload.get("message", "")).strip()
+            if message:
+                return message
+
+        text = (response.text or "").strip()
+        text = re.sub(r"\s+", " ", text)
+        if len(text) > 220:
+            text = f"{text[:217]}..."
+        return text or "no detail"
