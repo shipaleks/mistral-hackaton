@@ -96,7 +96,7 @@ class LLMClient:
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                async with httpx.AsyncClient(timeout=self._build_timeout()) as client:
                     response = await client.post(url, headers=headers, json=payload)
 
                 transient_statuses = {408, 409, 429, 500, 502, 503, 504}
@@ -155,3 +155,16 @@ class LLMClient:
         if len(text) > 220:
             text = f"{text[:217]}..."
         return text or "no detail"
+
+    def _build_timeout(self) -> httpx.Timeout:
+        total = max(1.0, float(self.timeout_seconds))
+        connect_timeout = min(10.0, total)
+        write_timeout = min(30.0, total)
+        pool_timeout = min(10.0, total)
+        return httpx.Timeout(
+            timeout=total,
+            connect=connect_timeout,
+            read=total,
+            write=write_timeout,
+            pool=pool_timeout,
+        )

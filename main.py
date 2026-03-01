@@ -29,12 +29,12 @@ async def lifespan(app: FastAPI):
     sse_manager = SSEManager()
     script_safety = ScriptSafetyGuard()
 
-    def build_llm(model: str) -> LLMClient:
+    def build_llm(model: str, timeout_seconds: float | None = None) -> LLMClient:
         return LLMClient(
             api_key=settings.mistral_api_key,
             model=model,
             api_base=settings.mistral_api_base,
-            timeout_seconds=settings.llm_timeout_seconds,
+            timeout_seconds=timeout_seconds or settings.llm_timeout_seconds,
             max_retries=settings.llm_max_retries,
             backoff_seconds=settings.llm_retry_backoff_seconds,
         )
@@ -44,7 +44,12 @@ async def lifespan(app: FastAPI):
         max_sections=settings.max_propositions_in_script,
     )
     analyst_agent = AnalystAgent(llm=build_llm(settings.analyst_model))
-    synthesizer_agent = SynthesizerAgent(llm=build_llm(settings.synthesizer_model))
+    synthesizer_agent = SynthesizerAgent(
+        llm=build_llm(
+            settings.synthesizer_model,
+            timeout_seconds=settings.synthesizer_timeout_seconds,
+        )
+    )
 
     elevenlabs_service = ElevenLabsService(
         api_key=settings.elevenlabs_api_key,

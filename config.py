@@ -60,6 +60,7 @@ class Settings:
     max_propositions_in_script: int
 
     llm_timeout_seconds: float
+    synthesizer_timeout_seconds: float
     llm_max_retries: int
     llm_retry_backoff_seconds: float
 
@@ -67,6 +68,7 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     mistral_model = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
+    llm_timeout_seconds = _env_float("LLM_TIMEOUT_SECONDS", 45.0)
     return Settings(
         app_base_url=os.getenv("APP_BASE_URL", "http://localhost:8000"),
         data_dir=Path(os.getenv("DATA_DIR", "./data/projects")),
@@ -90,7 +92,11 @@ def get_settings() -> Settings:
         prune_min_interviews=_env_int("PRUNE_MIN_INTERVIEWS", 3),
         max_interview_duration_minutes=_env_int("MAX_INTERVIEW_DURATION_MINUTES", 10),
         max_propositions_in_script=_env_int("MAX_PROPOSITIONS_IN_SCRIPT", 8),
-        llm_timeout_seconds=_env_float("LLM_TIMEOUT_SECONDS", 45.0),
+        llm_timeout_seconds=llm_timeout_seconds,
+        synthesizer_timeout_seconds=_env_float(
+            "SYNTHESIZER_TIMEOUT_SECONDS",
+            max(90.0, llm_timeout_seconds),
+        ),
         llm_max_retries=_env_int("LLM_MAX_RETRIES", 3),
         llm_retry_backoff_seconds=_env_float("LLM_RETRY_BACKOFF_SECONDS", 0.8),
     )
