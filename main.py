@@ -17,6 +17,7 @@ from config import get_settings
 from services.elevenlabs_service import ElevenLabsService
 from services.pipeline import Pipeline
 from services.project_service import ProjectService
+from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
 
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
 
     project_service = ProjectService(settings.data_dir)
     sse_manager = SSEManager()
+    script_safety = ScriptSafetyGuard()
 
     def build_llm(model: str) -> LLMClient:
         return LLMClient(
@@ -57,6 +59,7 @@ async def lifespan(app: FastAPI):
         designer=designer_agent,
         elevenlabs=elevenlabs_service,
         sse=sse_manager,
+        script_safety=script_safety,
     )
 
     app.state.settings = settings
@@ -66,6 +69,7 @@ async def lifespan(app: FastAPI):
     app.state.analyst_agent = analyst_agent
     app.state.synthesizer_agent = synthesizer_agent
     app.state.elevenlabs_service = elevenlabs_service
+    app.state.script_safety = script_safety
     app.state.pipeline = pipeline
 
     yield

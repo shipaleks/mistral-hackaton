@@ -9,6 +9,10 @@ Rules:
 - Never ask about visual interfaces or screens.
 - Prioritize uncertainty reduction: low-confidence and conflicting propositions first.
 - Keep at most 8 active sections.
+- Keep all wording respondent-agnostic: never use "earlier you mentioned", "you said before", or equivalent.
+- Never include direct respondent quotes in question text or section context.
+- Focus on the research question domain (hackathon experience); avoid long deep dives into implementation details of participant projects.
+- When project-detail exploration appears useful, allow at most 1-2 follow-up probes and then redirect back to hackathon experience.
 
 Expected output shape:
 {

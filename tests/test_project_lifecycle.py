@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 
-from api.routes_projects import _generate_report_task, get_qrcode
+from api.routes_projects import (
+    StartProjectRequest,
+    _generate_report_task,
+    get_qrcode,
+    start_project,
+)
 from models.analysis import AnalysisMetrics, AnalysisResult
 from models.evidence import Evidence
 from models.proposition import Proposition
 from models.script import InterviewScript, ScriptSection
 from services.pipeline import Pipeline
 from services.project_service import ProjectService
+from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
 
 
@@ -79,6 +86,40 @@ class SimpleDesigner:
 
     def build_interviewer_prompt(self, script):
         return f"PROMPT {script.version}"
+
+    async def generate_initial_script(self, *args, **kwargs):
+        propositions = [
+            Proposition(
+                id="P001",
+                factor="team dynamics",
+                mechanism="alignment quality",
+                outcome="delivery pace",
+                confidence=0.2,
+                status="exploring",
+            )
+        ]
+        script = InterviewScript(
+            version=1,
+            research_question=kwargs["research_question"],
+            opening_question="Open",
+            sections=[
+                ScriptSection(
+                    proposition_id="P001",
+                    priority="high",
+                    instruction="EXPLORE",
+                    main_question="How is your team collaboration?",
+                    probes=["Example"],
+                    context="",
+                )
+            ],
+            closing_question="Close",
+            wildcard="Anything else?",
+            mode="divergent",
+            convergence_score=0.1,
+            novelty_rate=0.9,
+            changes_summary="Init",
+        )
+        return propositions, script
 
 
 @pytest.mark.asyncio
@@ -195,3 +236,30 @@ async def test_pipeline_marks_report_stale_after_done(tmp_path):
     names = [e["event"] for e in events]
     assert "report_stale" in names
     assert "project_stats" in names
+
+
+@pytest.mark.asyncio
+async def test_start_project_rejects_agent_used_by_active_project(tmp_path):
+    project_service = ProjectService(tmp_path)
+    active = project_service.create_project("active", "RQ1")
+    active.status = "running"
+    active.elevenlabs_agent_id = "agent_busy"
+    project_service.save_project(active)
+
+    target = project_service.create_project("target", "RQ2")
+    project_service.save_project(target)
+
+    with pytest.raises(HTTPException) as exc:
+        await start_project(
+            project_id="target",
+            payload=StartProjectRequest(elevenlabs_agent_id="agent_busy"),
+            project_service=project_service,
+            designer=SimpleDesigner(),
+            elevenlabs=NoopElevenLabs(),
+            script_safety=ScriptSafetyGuard(),
+            settings=type("Settings", (), {"max_propositions_in_script": 8, "elevenlabs_agent_id": ""})(),
+            sse=SSEManager(),
+        )
+
+    assert exc.value.status_code == 409
+    assert "already used by active project" in str(exc.value.detail)

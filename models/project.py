@@ -16,6 +16,7 @@ def utc_now() -> datetime:
 
 
 ProjectStatus = Literal["draft", "running", "reporting", "done"]
+PromptSafetyStatus = Literal["ok", "sanitized", "fallback"]
 
 
 class ProjectMetrics(BaseModel):
@@ -54,6 +55,9 @@ class ProjectState(BaseModel):
 
     sync_pending: bool = False
     sync_pending_script_version: int | None = None
+    prompt_safety_status: PromptSafetyStatus = "ok"
+    prompt_safety_violations_count: int = 0
+    last_prompt_update_at: datetime | None = None
 
     @property
     def current_script(self) -> InterviewScript | None:

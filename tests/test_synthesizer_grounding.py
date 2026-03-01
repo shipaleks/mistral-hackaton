@@ -176,3 +176,54 @@ async def test_synthesizer_accepts_translated_quotes_with_original_marker():
     report = await agent.synthesize(project)
 
     assert report == translated_report
+
+
+@pytest.mark.asyncio
+async def test_synthesizer_rejects_non_english_quotes_outside_original_marker():
+    project = _sample_project()
+    project.interview_store = [
+        Interview(
+            id="INT_001",
+            conversation_id="conv-1",
+            transcript="text",
+            language="ru",
+            metadata={},
+        )
+    ]
+    project.evidence_store = [
+        Evidence(
+            id="E001",
+            interview_id="INT_001",
+            quote="Я почти не спал",
+            interpretation="Fatigue impacted performance",
+            factor="time pressure",
+            mechanism="sleep deprivation",
+            outcome="lower focus",
+            tags=["fatigue"],
+            language="ru",
+        )
+    ]
+    project.proposition_store = [
+        Proposition(
+            id="P001",
+            factor="time pressure",
+            mechanism="sleep deprivation",
+            outcome="lower focus",
+            confidence=0.6,
+            status="exploring",
+            supporting_evidence=["E001"],
+        )
+    ]
+
+    llm_output = '## Core Findings\n\n"Я почти не спал"'
+    agent = SynthesizerAgent(
+        DummyLLM(
+            response=llm_output,
+            json_response={"translations": [{"id": "E001", "english": "I barely slept."}]},
+        )
+    )
+
+    report = await agent.synthesize(project)
+
+    assert "Grounded Fallback" in report
+    assert 'Quote (EN): "I barely slept."' in report

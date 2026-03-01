@@ -144,6 +144,37 @@ class ProjectService:
         candidates.sort(reverse=True)
         return candidates[0][2]
 
+    def find_active_project_for_agent(
+        self,
+        agent_id: str,
+        exclude_project_id: str | None = None,
+    ) -> str | None:
+        agent = agent_id.strip()
+        if not agent:
+            return None
+
+        candidates: list[tuple[Any, str]] = []
+        for project_id in self.list_projects():
+            if exclude_project_id and project_id == exclude_project_id:
+                continue
+            try:
+                project = self.load_project(project_id)
+            except Exception:
+                continue
+
+            if (project.elevenlabs_agent_id or "").strip() != agent:
+                continue
+            if project.status not in {"running", "reporting"}:
+                continue
+
+            candidates.append((project.updated_at, project.id))
+
+        if not candidates:
+            return None
+
+        candidates.sort(reverse=True)
+        return candidates[0][1]
+
     def list_project_cards(self) -> list[dict[str, Any]]:
         cards: list[dict[str, Any]] = []
         for project_id in self.list_projects():
@@ -171,6 +202,8 @@ class ProjectService:
             "mode": project.metrics.mode,
             "updated_at": project.updated_at.isoformat(),
             "report_stale": project.report_stale,
+            "prompt_safety_status": project.prompt_safety_status,
+            "prompt_safety_violations_count": project.prompt_safety_violations_count,
         }
 
     def project_summary(self, project_id: str) -> dict[str, Any]:

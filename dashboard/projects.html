@@ -7,17 +7,27 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <style>
       :root {
-        --bg: #f7f5ef;
-        --panel: #fffdf8;
-        --line: #d8d5c8;
-        --ink: #171717;
-        --muted: #686868;
-        --accent: #0f766e;
-        --accent-soft: #ecfdf5;
-        --warn: #b45309;
-        --warn-soft: #fffbeb;
-        --danger: #b91c1c;
-        --danger-soft: #fef2f2;
+        --mistral-ink: #23262c;
+        --mistral-paper: #faf8f2;
+        --mistral-orange: #ff7043;
+        --mistral-yellow: #ffca28;
+        --mistral-green: #14c985;
+        --mistral-blue: #338df5;
+        --mistral-brown: #5d4037;
+
+        --bg: var(--mistral-paper);
+        --panel: #fffdf9;
+        --line: #d9d6cc;
+        --ink: var(--mistral-ink);
+        --muted: #66635e;
+        --accent: var(--mistral-orange);
+        --accent-soft: #ffefe9;
+        --ok: var(--mistral-green);
+        --ok-soft: #e8fff6;
+        --warn: var(--mistral-yellow);
+        --warn-soft: #fff9df;
+        --danger: #d43f35;
+        --danger-soft: #fff0ef;
       }
 
       * {
@@ -27,8 +37,8 @@
       body {
         margin: 0;
         color: var(--ink);
-        background: radial-gradient(circle at top left, #f2ecde 0%, #f7f5ef 50%, #faf9f4 100%);
-        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at top left, #fff2ea 0%, var(--bg) 45%, #f4f3ed 100%);
+        font-family: "Inter", "Avenir Next", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
 
       .layout {
@@ -39,7 +49,7 @@
 
       .sidebar {
         border-right: 1px solid var(--line);
-        background: #f2f0e8;
+        background: #f7f4ec;
         padding: 16px;
       }
 
@@ -104,21 +114,21 @@
       }
 
       .pill.ok {
-        border-color: #86efac;
-        background: #f0fdf4;
-        color: #166534;
+        border-color: var(--ok);
+        background: var(--ok-soft);
+        color: #0f7b53;
       }
 
       .pill.warn {
-        border-color: #fdba74;
-        background: #fff7ed;
-        color: #9a3412;
+        border-color: var(--warn);
+        background: var(--warn-soft);
+        color: #7f6200;
       }
 
       .pill.error {
-        border-color: #fca5a5;
-        background: #fef2f2;
-        color: #991b1b;
+        border-color: var(--danger);
+        background: var(--danger-soft);
+        color: #8f1f18;
       }
 
       .form {
@@ -146,7 +156,7 @@
       }
 
       textarea {
-        min-height: 92px;
+        min-height: 90px;
         resize: vertical;
       }
 
@@ -174,9 +184,15 @@
       }
 
       button.warn {
-        border-color: #fdba74;
-        background: #fff7ed;
-        color: #9a3412;
+        border-color: var(--warn);
+        background: var(--warn-soft);
+        color: #6f5700;
+      }
+
+      button.active {
+        border-color: var(--mistral-blue);
+        color: #0b57b7;
+        box-shadow: inset 0 0 0 1px var(--mistral-blue);
       }
 
       button:disabled {
@@ -231,10 +247,6 @@
         line-height: 1.35;
       }
 
-      .project-meta strong {
-        font-weight: 700;
-      }
-
       .flow-head {
         display: grid;
         gap: 8px;
@@ -277,7 +289,7 @@
       .talk-link {
         font-size: 13px;
         word-break: break-all;
-        color: #0f172a;
+        color: #17335f;
       }
 
       .qr {
@@ -291,7 +303,7 @@
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 8px;
       }
 
@@ -325,7 +337,7 @@
         border-radius: 12px;
         background: #fff;
         width: 100%;
-        height: 560px;
+        height: 520px;
       }
 
       .graph-side {
@@ -336,7 +348,7 @@
         display: grid;
         gap: 10px;
         align-content: start;
-        max-height: 560px;
+        max-height: 520px;
         overflow: auto;
       }
 
@@ -361,10 +373,7 @@
         padding: 8px;
         font-size: 12px;
         line-height: 1.45;
-      }
-
-      .mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        overflow-wrap: anywhere;
       }
 
       .legend {
@@ -395,8 +404,16 @@
         border-radius: 12px;
         background: #fff;
         padding: 8px;
-        max-height: 460px;
+        height: 330px;
+        max-height: 330px;
         overflow: auto;
+      }
+
+      .report-wrap pre {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       details {
@@ -413,13 +430,17 @@
       }
 
       .danger-box {
-        border: 1px solid #fca5a5;
+        border: 1px solid var(--danger);
         background: var(--danger-soft);
         color: #7f1d1d;
         border-radius: 10px;
         padding: 8px;
         font-size: 12px;
         line-height: 1.45;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
 
       @media (max-width: 1220px) {
@@ -445,7 +466,11 @@
         }
 
         .graph-canvas {
-          height: 500px;
+          height: 460px;
+        }
+
+        .graph-side {
+          max-height: 340px;
         }
       }
     </style>
@@ -455,11 +480,7 @@
       <aside class="sidebar">
         <div class="brand">
           <h1>Eidetic</h1>
-          <p class="muted">Qualitative research loop: project -> calls -> evidence map -> report</p>
-          <div class="pill-row">
-            <span class="pill" id="healthPill">health: ...</span>
-            <span class="pill" id="livePill">live: ...</span>
-          </div>
+          <p class="muted">Create project, run interviews, review evidence map, generate report.</p>
         </div>
 
         <div class="card">
@@ -477,10 +498,7 @@
         </div>
 
         <div class="card" style="margin-top:10px;">
-          <div class="row" style="justify-content:space-between;">
-            <h3>Projects</h3>
-            <span class="pill">auto refresh</span>
-          </div>
+          <h3>Projects</h3>
           <div id="projectsList" class="projects-list"></div>
         </div>
       </aside>
@@ -529,9 +547,7 @@
               <div class="row">
                 <button class="warn" id="finishBtn">Finish & generate report</button>
               </div>
-              <div class="danger-box" id="ingestionHint">
-                Waiting for first transcript via webhook.
-              </div>
+              <div class="danger-box" id="ingestionHint">Waiting for first transcript via webhook.</div>
             </article>
           </div>
 
@@ -539,38 +555,34 @@
         </section>
 
         <section class="card">
-          <h2>Evidence Map</h2>
-          <p class="muted" style="margin-top:4px;">
-            Node = one evidence item. Label = evidence ID. Color = interview index. Size = how connected the evidence is.
-            Edge appears when similarity score >= 0.70 using proposition overlap (45%), tag overlap (35%), and factor/mechanism/outcome token overlap (20%).
-            Shaded overlay groups evidence supporting the same proposition.
-          </p>
+          <div class="row" style="justify-content:space-between; align-items:flex-start;">
+            <div>
+              <h2>Evidence Map</h2>
+              <p class="muted" style="margin-top:4px;" id="graphDescription">
+                Hypothesis Map: hypotheses are blocks, evidence nodes attach as supports (green) or contradicts (red).
+              </p>
+            </div>
+            <div class="row">
+              <button id="modeHypothesisBtn" class="active">Hypothesis Map</button>
+              <button id="modeNetworkBtn">Evidence Network</button>
+            </div>
+          </div>
 
           <div class="metrics" id="metrics" style="margin-top:10px;"></div>
 
           <div class="graph-wrap">
             <div>
               <svg id="graph" class="graph-canvas"></svg>
-              <div class="legend">
-                <span class="legend-dot" style="color:#16a34a;">confirmed proposition overlay</span>
-                <span class="legend-dot" style="color:#eab308;">exploring proposition overlay</span>
-                <span class="legend-dot" style="color:#dc2626;">challenged proposition overlay</span>
-                <span class="legend-dot" style="color:#9ca3af;">weak/merged proposition overlay</span>
-              </div>
+              <div class="legend" id="graphLegend"></div>
             </div>
-
             <aside class="graph-side">
-              <div class="graph-rule" id="graphSummary">
-                No evidence yet.
-              </div>
-
+              <div class="graph-rule" id="graphSummary">No evidence yet.</div>
               <div>
-                <h4>Selected Evidence</h4>
+                <h4>Selected Node</h4>
                 <div class="mini-list" id="selectedEvidence"></div>
               </div>
-
               <div>
-                <h4>Proposition Overlays</h4>
+                <h4>Map Details</h4>
                 <div class="mini-list" id="overlayList"></div>
               </div>
             </aside>
@@ -596,6 +608,8 @@
         cards: [],
         selectedProjectId: null,
         selectedProject: null,
+        hypothesisMap: null,
+        visualMode: "hypothesis",
         sse: null,
         sseConnected: false,
         cardsTimer: null,
@@ -603,9 +617,9 @@
         refreshDebounce: null,
         graph: {
           svg: null,
-          gOverlays: null,
           gLinks: null,
           gNodes: null,
+          gOverlays: null,
           gEmpty: null,
           simulation: null,
           nodePositions: new Map(),
@@ -616,8 +630,6 @@
       };
 
       const els = {
-        healthPill: document.getElementById("healthPill"),
-        livePill: document.getElementById("livePill"),
         researchQuestion: document.getElementById("researchQuestion"),
         createProjectBtn: document.getElementById("createProjectBtn"),
         createStatus: document.getElementById("createStatus"),
@@ -638,6 +650,10 @@
         metrics: document.getElementById("metrics"),
         graph: document.getElementById("graph"),
         graphSummary: document.getElementById("graphSummary"),
+        graphDescription: document.getElementById("graphDescription"),
+        graphLegend: document.getElementById("graphLegend"),
+        modeHypothesisBtn: document.getElementById("modeHypothesisBtn"),
+        modeNetworkBtn: document.getElementById("modeNetworkBtn"),
         selectedEvidence: document.getElementById("selectedEvidence"),
         overlayList: document.getElementById("overlayList"),
         reportStatus: document.getElementById("reportStatus"),
@@ -663,9 +679,9 @@
       }
 
       function statusColor(status) {
-        if (status === "done") return "#0f766e";
-        if (status === "reporting") return "#b45309";
-        if (status === "running") return "#2563eb";
+        if (status === "done") return "var(--ok)";
+        if (status === "reporting") return "#a56c00";
+        if (status === "running") return "var(--mistral-blue)";
         return "#6b7280";
       }
 
@@ -693,35 +709,14 @@
         return data;
       }
 
-      async function checkHealth() {
-        try {
-          const result = await api("/health");
-          els.healthPill.className = "pill ok";
-          els.healthPill.textContent = `health: ${result.status}`;
-        } catch {
-          els.healthPill.className = "pill error";
-          els.healthPill.textContent = "health: down";
-        }
-      }
-
-      function renderLivePill() {
-        if (state.sseConnected) {
-          els.livePill.className = "pill ok";
-          els.livePill.textContent = "live: streaming";
-          return;
-        }
-        els.livePill.className = "pill warn";
-        els.livePill.textContent = "live: polling fallback";
-      }
-
       async function refreshCards({ silent = false } = {}) {
         try {
           const cards = await api("/api/projects/cards");
           state.cards = Array.isArray(cards) ? cards : [];
 
           if (state.selectedProjectId) {
-            const stillExists = state.cards.some((card) => card.id === state.selectedProjectId);
-            if (!stillExists) {
+            const exists = state.cards.some((card) => card.id === state.selectedProjectId);
+            if (!exists) {
               state.selectedProjectId = state.cards[0] ? state.cards[0].id : null;
             }
           } else if (state.cards[0]) {
@@ -742,7 +737,6 @@
 
       function renderCards() {
         els.projectsList.innerHTML = "";
-
         if (!state.cards.length) {
           const empty = document.createElement("div");
           empty.className = "project-item";
@@ -757,9 +751,9 @@
           item.innerHTML = `
             <div class="project-title">${escapeHtml(card.id)}</div>
             <div class="project-meta">
-              <div><strong style="color:${statusColor(card.status)};">${escapeHtml(card.status)}</strong>${card.report_stale ? " • stale report" : ""}</div>
+              <div><strong style="color:${statusColor(card.status)};">${escapeHtml(card.status)}</strong>${card.report_stale ? " - stale report" : ""}</div>
               <div>${card.interviews_count} interview(s), ${card.evidence_count} evidence</div>
-              <div>convergence ${toPct(card.convergence_score)} • novelty ${toPct(card.novelty_rate)}</div>
+              <div>convergence ${toPct(card.convergence_score)} - novelty ${toPct(card.novelty_rate)}</div>
             </div>
           `;
           item.onclick = () => selectProject(card.id);
@@ -779,6 +773,7 @@
         try {
           const project = await api(`/api/projects/${encodeURIComponent(projectId)}`);
           state.selectedProject = project;
+          state.hypothesisMap = await api(`/api/projects/${encodeURIComponent(projectId)}/visualization/hypothesis-map`);
           renderProject(project);
           if (!silent) {
             setStatus(els.controlStatus, `Loaded project ${project.id}`);
@@ -807,18 +802,16 @@
         const hasData = interviewsCount > 0 && evidenceCount > 0;
 
         if (hasData) {
-          els.ingestionHint.className = "danger-box";
-          els.ingestionHint.style.borderColor = "#86efac";
-          els.ingestionHint.style.background = "#f0fdf4";
-          els.ingestionHint.style.color = "#166534";
-          els.ingestionHint.textContent = `Webhook ingestion OK: ${interviewsCount} interview(s), ${evidenceCount} evidence item(s).`;
+          els.ingestionHint.style.borderColor = "var(--ok)";
+          els.ingestionHint.style.background = "var(--ok-soft)";
+          els.ingestionHint.style.color = "#0f7b53";
+          els.ingestionHint.textContent = `Webhook ingestion OK: ${interviewsCount} interview(s), ${evidenceCount} evidence item(s). prompt safety: ${project.prompt_safety_status || "ok"}.`;
           els.finishBtn.disabled = false;
           return;
         }
 
-        els.ingestionHint.className = "danger-box";
-        els.ingestionHint.style.borderColor = "#fca5a5";
-        els.ingestionHint.style.background = "#fef2f2";
+        els.ingestionHint.style.borderColor = "var(--danger)";
+        els.ingestionHint.style.background = "var(--danger-soft)";
         els.ingestionHint.style.color = "#7f1d1d";
         els.ingestionHint.textContent = "No interview transcript ingested yet. Complete one call and wait for webhook delivery before finishing.";
         els.finishBtn.disabled = true;
@@ -833,7 +826,6 @@
           els.qrImg.removeAttribute("src");
           return;
         }
-
         els.talkBlock.style.display = "grid";
         els.talkPlaceholder.style.display = "none";
         els.talkLink.textContent = talk;
@@ -843,17 +835,14 @@
 
       function renderMetrics(project) {
         const activePropositions = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
-
-        const data = [
+        const metrics = [
           ["Participants", String((project.interview_store || []).length)],
           ["Evidence", String((project.evidence_store || []).length)],
-          ["Active propositions", String(activePropositions)],
+          ["Active hypotheses", String(activePropositions)],
           ["Convergence", toPct(project.metrics?.convergence_score)],
           ["Novelty", toPct(project.metrics?.novelty_rate)],
-          ["Mode", project.metrics?.mode || "divergent"],
         ];
-
-        els.metrics.innerHTML = data
+        els.metrics.innerHTML = metrics
           .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`)
           .join("");
       }
@@ -881,13 +870,12 @@
       function propositionColor(prop) {
         if (["weak", "merged"].includes(prop.status)) return "#9ca3af";
         if ((prop.confidence || 0) < 0.35) return "#dc2626";
-        if ((prop.confidence || 0) < 0.7) return "#eab308";
-        return "#16a34a";
+        if ((prop.confidence || 0) < 0.7) return "#ffca28";
+        return "#14c985";
       }
 
       function ensureGraphInitialized() {
         if (state.graph.svg) return;
-
         const svg = d3.select(els.graph);
         state.graph.svg = svg;
         state.graph.gOverlays = svg.append("g").attr("class", "overlays");
@@ -896,7 +884,34 @@
         state.graph.gEmpty = svg.append("g").attr("class", "empty");
       }
 
-      function buildGraphData(project, width, height) {
+      function resetGraphLayers() {
+        state.graph.gOverlays.selectAll("*").remove();
+        state.graph.gLinks.selectAll("*").remove();
+        state.graph.gNodes.selectAll("*").remove();
+        state.graph.gEmpty.selectAll("*").remove();
+      }
+
+      function setGraphLegend(mode) {
+        if (mode === "hypothesis") {
+          els.graphDescription.textContent = "Hypothesis Map: hypothesis blocks connect to evidence as supports (green) or contradicts (red). Unassigned evidence forms candidate clusters.";
+          els.graphLegend.innerHTML = `
+            <span class="legend-dot" style="color:#14c985;">supports</span>
+            <span class="legend-dot" style="color:#d43f35;">contradicts</span>
+            <span class="legend-dot" style="color:#338df5;">hypothesis node</span>
+            <span class="legend-dot" style="color:#5d4037;">candidate cluster</span>
+          `;
+          return;
+        }
+        els.graphDescription.textContent = "Evidence Network: each node is evidence, links appear for similarity >= 0.70 (proposition/tags/FMO overlap).";
+        els.graphLegend.innerHTML = `
+          <span class="legend-dot" style="color:#14c985;">confirmed overlay</span>
+          <span class="legend-dot" style="color:#ffca28;">exploring overlay</span>
+          <span class="legend-dot" style="color:#d43f35;">challenged overlay</span>
+          <span class="legend-dot" style="color:#9ca3af;">weak/merged overlay</span>
+        `;
+      }
+
+      function buildEvidenceNetworkData(project, width, height) {
         const evidence = (project.evidence_store || []).map((item) => ({ ...item }));
         const propositions = project.proposition_store || [];
         const propositionMap = new Map(propositions.map((p) => [p.id, p]));
@@ -904,9 +919,7 @@
         const evidenceToProps = new Map(evidence.map((e) => [e.id, new Set()]));
         for (const prop of propositions) {
           for (const id of [...(prop.supporting_evidence || []), ...(prop.contradicting_evidence || [])]) {
-            if (evidenceToProps.has(id)) {
-              evidenceToProps.get(id).add(prop.id);
-            }
+            if (evidenceToProps.has(id)) evidenceToProps.get(id).add(prop.id);
           }
         }
 
@@ -915,6 +928,7 @@
           const interviewIndex = Number(String(evidenceItem.interview_id || "").replace(/\D/g, "")) || 1;
           return {
             id: evidenceItem.id,
+            type: "evidence",
             interviewId: evidenceItem.interview_id,
             quote: evidenceItem.quote,
             factor: evidenceItem.factor,
@@ -940,88 +954,265 @@
             const propositionOverlap = jaccard(a.propositionIds, b.propositionIds);
             const tagOverlap = jaccard(a.tags, b.tags);
             const fmoOverlap = jaccard(a.fmoTokens, b.fmoTokens);
-            const score = 0.45 * propositionOverlap + 0.35 * tagOverlap + 0.2 * fmoOverlap;
+            const score = 0.45 * propositionOverlap + 0.35 * tagOverlap + 0.20 * fmoOverlap;
             if (score >= 0.7) {
-              edges.push({
-                source: a.id,
-                target: b.id,
-                score,
-                propositionOverlap,
-                tagOverlap,
-                fmoOverlap,
-              });
+              edges.push({ source: a.id, target: b.id, score, propositionOverlap, tagOverlap, fmoOverlap, relation: "similarity" });
               a.degree += 1;
               b.degree += 1;
             }
           }
         }
 
-        const radiusScale = d3
-          .scaleLinear()
-          .domain([0, Math.max(1, d3.max(nodes, (node) => node.degree) || 1)])
-          .range([8, 16]);
-
-        for (const node of nodes) {
-          node.r = radiusScale(node.degree);
-        }
+        const radiusScale = d3.scaleLinear().domain([0, Math.max(1, d3.max(nodes, (node) => node.degree) || 1)]).range([8, 16]);
+        for (const node of nodes) node.r = radiusScale(node.degree);
 
         return { nodes, edges, propositionMap };
       }
 
-      function renderGraph(project) {
-        ensureGraphInitialized();
+      function renderEmptyGraph(message) {
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 520;
+        resetGraphLayers();
+        state.graph.gEmpty
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", height / 2)
+          .attr("text-anchor", "middle")
+          .attr("fill", "#6b7280")
+          .attr("font-size", "14")
+          .text(message);
+      }
 
-        const svg = state.graph.svg;
-        const gOverlays = state.graph.gOverlays;
-        const gLinks = state.graph.gLinks;
-        const gNodes = state.graph.gNodes;
-        const gEmpty = state.graph.gEmpty;
+      function renderHypothesisMap(project) {
+        const map = state.hypothesisMap;
+        if (!map || !Array.isArray(map.nodes)) {
+          renderEmptyGraph("Hypothesis map is not available yet.");
+          els.graphSummary.textContent = "Hypothesis model unavailable.";
+          els.selectedEvidence.innerHTML = '<div class="mini-card">No node selected.</div>';
+          els.overlayList.innerHTML = '<div class="mini-card">No map details yet.</div>';
+          return;
+        }
 
         const width = els.graph.clientWidth || 900;
-        const height = els.graph.clientHeight || 560;
-        svg.attr("viewBox", `0 0 ${width} ${height}`);
+        const height = els.graph.clientHeight || 520;
+        state.graph.svg.attr("viewBox", `0 0 ${width} ${height}`);
+        resetGraphLayers();
 
-        const { nodes, edges, propositionMap } = buildGraphData(project, width, height);
+        const nodes = map.nodes.map((item) => {
+          const existing = state.graph.nodePositions.get(item.id);
+          return {
+            ...item,
+            x: existing ? existing.x : width / 2 + (Math.random() - 0.5) * 120,
+            y: existing ? existing.y : height / 2 + (Math.random() - 0.5) * 120,
+            vx: existing ? existing.vx : 0,
+            vy: existing ? existing.vy : 0,
+          };
+        });
+        const nodeById = new Map(nodes.map((node) => [node.id, node]));
+        const edges = (map.edges || []).map((edge, idx) => ({ ...edge, id: `${edge.source}-${edge.target}-${idx}` }));
+
+        state.graph.nodeById = nodeById;
+        state.graph.edges = edges;
+
+        const activeNodes = nodes.filter((node) => node.type === "hypothesis" || node.type === "evidence" || node.type === "candidate_cluster");
+        if (!activeNodes.length) {
+          renderEmptyGraph("No hypotheses/evidence available yet.");
+          return;
+        }
+
+        if (!state.graph.selectedNodeId || !nodeById.has(state.graph.selectedNodeId)) {
+          state.graph.selectedNodeId = activeNodes[0].id;
+        }
+
+        const simulation = d3
+          .forceSimulation(nodes)
+          .force("link", d3.forceLink(edges).id((d) => d.id).distance((d) => (d.relation === "potential_supporter" ? 130 : 95)).strength(0.35))
+          .force("charge", d3.forceManyBody().strength(-220))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .force("x", d3.forceX((d) => (d.type === "hypothesis" ? width * 0.24 : d.type === "candidate_cluster" ? width * 0.5 : width * 0.74)).strength(0.32))
+          .force("y", d3.forceY(height / 2).strength(0.06))
+          .force("collide", d3.forceCollide().radius((d) => (d.type === "hypothesis" ? 34 : d.type === "candidate_cluster" ? 28 : 20)));
+
+        state.graph.simulation = simulation;
+
+        const link = state.graph.gLinks
+          .selectAll("line")
+          .data(edges, (d) => d.id)
+          .join("line")
+          .attr("stroke", (d) => {
+            if (d.relation === "supports") return "#14c985";
+            if (d.relation === "contradicts") return "#d43f35";
+            if (d.relation === "potential_supporter") return "#7a7a7a";
+            return "#338df5";
+          })
+          .attr("stroke-width", (d) => (d.relation === "potential_supporter" ? 1.2 : 1.8))
+          .attr("stroke-opacity", (d) => (d.relation === "potential_supporter" ? 0.45 : 0.85))
+          .attr("stroke-dasharray", (d) => (d.relation === "potential_supporter" ? "5,5" : d.relation === "candidate_member" ? "3,4" : ""));
+
+        const nodeGroup = state.graph.gNodes
+          .selectAll("g.node")
+          .data(nodes, (d) => d.id)
+          .join((enter) => {
+            const g = enter.append("g").attr("class", "node").style("cursor", "pointer");
+            g.append("rect").attr("rx", 10).attr("ry", 10);
+            g.append("circle");
+            g.append("text").attr("text-anchor", "middle").attr("font-size", 10).attr("font-weight", 700).attr("pointer-events", "none");
+            return g;
+          });
+
+        nodeGroup.each(function (d) {
+          const g = d3.select(this);
+          const rect = g.select("rect");
+          const circle = g.select("circle");
+          const text = g.select("text");
+
+          if (d.type === "hypothesis") {
+            rect
+              .attr("display", null)
+              .attr("x", -48)
+              .attr("y", -18)
+              .attr("width", 96)
+              .attr("height", 36)
+              .attr("fill", "#e8f3ff")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#0d4a95" : "#338df5")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.4);
+            circle.attr("display", "none");
+            text.attr("fill", "#0d4a95").text(d.id);
+          } else if (d.type === "candidate_cluster") {
+            rect.attr("display", "none");
+            circle
+              .attr("display", null)
+              .attr("r", 16)
+              .attr("fill", "#fff2e8")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#5d4037" : "#b78363")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.4)
+              .attr("stroke-dasharray", "4,3");
+            text.attr("fill", "#5d4037").text(d.id.replace("CLUSTER_", "C"));
+          } else {
+            rect.attr("display", "none");
+            circle
+              .attr("display", null)
+              .attr("r", 13)
+              .attr("fill", "#fff")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#23262c" : "#6b7280")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.2);
+            text.attr("fill", "#23262c").text(d.id);
+          }
+        });
+
+        nodeGroup.selectAll("title").remove();
+        nodeGroup.append("title").text((d) => `${d.id}\n${d.label || ""}`);
+
+        nodeGroup.on("click", (_, node) => {
+          state.graph.selectedNodeId = node.id;
+          renderHypothesisMap(project);
+        });
+
+        simulation.on("tick", () => {
+          link
+            .attr("x1", (d) => (nodeById.get(d.source.id || d.source) || {}).x)
+            .attr("y1", (d) => (nodeById.get(d.source.id || d.source) || {}).y)
+            .attr("x2", (d) => (nodeById.get(d.target.id || d.target) || {}).x)
+            .attr("y2", (d) => (nodeById.get(d.target.id || d.target) || {}).y);
+
+          nodeGroup.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+          for (const node of nodes) {
+            state.graph.nodePositions.set(node.id, { x: node.x, y: node.y, vx: node.vx, vy: node.vy });
+          }
+        });
+
+        const stats = map.stats || {};
+        els.graphSummary.textContent = `Hypotheses: ${stats.hypotheses || 0}. Evidence: ${stats.evidence || 0}. Supports: ${stats.supports_edges || 0}. Contradicts: ${stats.contradicts_edges || 0}. Unassigned: ${stats.unassigned_evidence || 0}.`;
+
+        renderSelectedHypothesisNode(map, state.graph.selectedNodeId);
+        renderHypothesisDetails(map);
+      }
+
+      function renderSelectedHypothesisNode(map, nodeId) {
+        const node = (map.nodes || []).find((item) => item.id === nodeId);
+        if (!node) {
+          els.selectedEvidence.innerHTML = '<div class="mini-card">Click a node to inspect details.</div>';
+          return;
+        }
+
+        if (node.type === "hypothesis") {
+          const linked = (map.edges || []).filter((edge) => edge.source === node.id || edge.target === node.id);
+          els.selectedEvidence.innerHTML = `
+            <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>${escapeHtml(node.label || "")}</div>
+            <div class="mini-card">status: ${escapeHtml(node.status || "")}, confidence: ${toPct(node.confidence || 0)}</div>
+            <div class="mini-card">supports: ${node.support_count || 0}, contradicts: ${node.contradict_count || 0}, links: ${linked.length}</div>
+          `;
+          return;
+        }
+
+        if (node.type === "candidate_cluster") {
+          els.selectedEvidence.innerHTML = `
+            <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>${escapeHtml(node.label || "")}</div>
+            <div class="mini-card">members: ${node.size || 0}</div>
+            <div class="mini-card">candidate cluster from unassigned evidence (read-only).</div>
+          `;
+          return;
+        }
+
+        const mapped = Array.isArray(node.mapped_hypotheses) ? node.mapped_hypotheses.join(", ") : "none";
+        els.selectedEvidence.innerHTML = `
+          <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>interview: ${escapeHtml(node.interview_id || "unknown")}</div>
+          <div class="mini-card"><strong>Quote</strong><br/>${escapeHtml(node.label || "")}</div>
+          <div class="mini-card"><strong>F-M-O</strong><br/>${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}</div>
+          <div class="mini-card">mapped hypotheses: ${escapeHtml(mapped || "none")}</div>
+        `;
+      }
+
+      function renderHypothesisDetails(map) {
+        const clusters = map.clusters || [];
+        const pool = map.unassigned_pool || [];
+
+        let html = "";
+        if (clusters.length) {
+          html += clusters
+            .slice(0, 6)
+            .map((cluster) => {
+              const supporters = (cluster.potential_supporters || []).map((item) => `${item.evidence_id} (${item.score})`).join(", ");
+              return `<div class="mini-card"><strong>${escapeHtml(cluster.id)}</strong>: ${escapeHtml(cluster.label || "")}<br/>members: ${(cluster.evidence_ids || []).length}<br/>potential supporters: ${escapeHtml(supporters || "none")}</div>`;
+            })
+            .join("");
+        }
+
+        if (!html) {
+          html = '<div class="mini-card">No candidate clusters yet.</div>';
+        }
+
+        html += `<div class="mini-card"><strong>Unassigned evidence pool</strong><br/>count: ${pool.length}</div>`;
+        els.overlayList.innerHTML = html;
+      }
+
+      function renderEvidenceNetwork(project) {
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 520;
+        state.graph.svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+        const { nodes, edges, propositionMap } = buildEvidenceNetworkData(project, width, height);
         state.graph.nodeById = new Map(nodes.map((node) => [node.id, node]));
         state.graph.edges = edges;
 
         if (!nodes.length) {
-          if (state.graph.simulation) {
-            state.graph.simulation.stop();
-          }
-          gOverlays.selectAll("*").remove();
-          gLinks.selectAll("*").remove();
-          gNodes.selectAll("*").remove();
-          gEmpty.selectAll("*").remove();
-          gEmpty
-            .append("text")
-            .attr("x", width / 2)
-            .attr("y", height / 2)
-            .attr("text-anchor", "middle")
-            .attr("fill", "#6b7280")
-            .attr("font-size", "14")
-            .text("No evidence yet. Complete interviews to populate this map.");
-
+          renderEmptyGraph("No evidence yet. Complete interviews to populate this map.");
           state.graph.selectedNodeId = null;
-          renderSelectedEvidence(null, project, propositionMap);
-          renderOverlayList(project);
+          els.selectedEvidence.innerHTML = '<div class="mini-card">No node selected.</div>';
+          els.overlayList.innerHTML = '<div class="mini-card">No hypotheses yet.</div>';
           els.graphSummary.textContent = "No evidence yet. Node and edge metrics will appear after first webhook ingestion.";
           return;
         }
 
-        gEmpty.selectAll("*").remove();
+        resetGraphLayers();
 
         if (!state.graph.selectedNodeId || !state.graph.nodeById.has(state.graph.selectedNodeId)) {
           state.graph.selectedNodeId = nodes[0].id;
         }
 
-        if (!state.graph.simulation) {
-          state.graph.simulation = d3.forceSimulation(nodes);
-        }
-
-        const simulation = state.graph.simulation;
-        simulation
-          .nodes(nodes)
+        const simulation = d3
+          .forceSimulation(nodes)
           .force("link", d3.forceLink(edges).id((d) => d.id).distance(95).strength(0.36))
           .force("charge", d3.forceManyBody().strength(-180))
           .force("center", d3.forceCenter(width / 2, height / 2))
@@ -1029,123 +1220,55 @@
           .alpha(0.9)
           .restart();
 
-        const links = gLinks
+        state.graph.simulation = simulation;
+
+        const links = state.graph.gLinks
           .selectAll("line")
           .data(edges, (d) => `${d.source.id || d.source}-${d.target.id || d.target}`)
-          .join(
-            (enter) =>
-              enter
-                .append("line")
-                .attr("stroke", "#94a3b8")
-                .attr("stroke-opacity", 0.34)
-                .attr("stroke-width", (d) => 1 + d.score * 2.1)
-                .attr("stroke-dasharray", "5,5")
-                .attr("stroke-dashoffset", 40)
-                .call((selection) => selection.transition().duration(500).attr("stroke-dashoffset", 0)),
-            (update) => update,
-            (exit) => exit.remove()
-          );
+          .join("line")
+          .attr("stroke", "#95a0ad")
+          .attr("stroke-opacity", 0.34)
+          .attr("stroke-width", (d) => 1 + d.score * 2.1)
+          .attr("stroke-dasharray", "5,5");
 
-        links.selectAll("title").remove();
-        links
-          .append("title")
-          .text((d) => `score ${d.score.toFixed(2)}\nprop ${d.propositionOverlap.toFixed(2)}\ntag ${d.tagOverlap.toFixed(2)}\nfmo ${d.fmoOverlap.toFixed(2)}`);
-
-        const nodeGroups = gNodes
+        const nodeGroups = state.graph.gNodes
           .selectAll("g.node")
           .data(nodes, (d) => d.id)
-          .join(
-            (enter) => {
-              const group = enter
-                .append("g")
-                .attr("class", "node")
-                .style("cursor", "pointer")
-                .attr("opacity", 0)
-                .call((selection) => selection.transition().duration(450).attr("opacity", 1));
-
-              group
-                .append("circle")
-                .attr("stroke", "#ffffff")
-                .attr("stroke-width", 1.3)
-                .attr("fill", (d) => d.interviewColor)
-                .attr("r", (d) => d.r);
-
-              group
-                .append("text")
-                .attr("text-anchor", "middle")
-                .attr("dy", 4)
-                .attr("font-size", 10)
-                .attr("font-weight", 700)
-                .attr("pointer-events", "none")
-                .attr("fill", "#111827")
-                .text((d) => d.id);
-
-              return group;
-            },
-            (update) => update,
-            (exit) => exit.remove()
-          );
+          .join((enter) => {
+            const group = enter.append("g").attr("class", "node").style("cursor", "pointer");
+            group.append("circle");
+            group.append("text").attr("text-anchor", "middle").attr("dy", 4).attr("font-size", 10).attr("font-weight", 700).attr("pointer-events", "none");
+            return group;
+          });
 
         nodeGroups
           .select("circle")
           .attr("fill", (d) => d.interviewColor)
           .attr("r", (d) => d.r)
-          .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#0f172a" : "#ffffff"))
-          .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.3 : 1.3));
+          .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#23262c" : "#ffffff"))
+          .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.2 : 1.3));
 
-        nodeGroups.select("text").text((d) => d.id);
+        nodeGroups.select("text").attr("fill", "#23262c").text((d) => d.id);
 
         nodeGroups.selectAll("title").remove();
-        nodeGroups
-          .append("title")
-          .text((d) => `${d.id}\n${d.factor} -> ${d.mechanism} -> ${d.outcome}\n${d.quote}`);
+        nodeGroups.append("title").text((d) => `${d.id}\n${d.quote}`);
 
-        const drag = d3
-          .drag()
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.25).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on("drag", (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          });
+        const overlaysData = (project.proposition_store || []).map((proposition) => ({ proposition, evidenceIds: proposition.supporting_evidence || [] }));
 
-        nodeGroups.call(drag).on("click", (_, node) => {
-          state.graph.selectedNodeId = node.id;
-          nodeGroups
-            .select("circle")
-            .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#0f172a" : "#ffffff"))
-            .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.3 : 1.3));
-          renderSelectedEvidence(node, project, propositionMap);
-        });
-
-        const overlayData = (project.proposition_store || []).map((proposition) => ({
-          proposition,
-          evidenceIds: proposition.supporting_evidence || [],
-        }));
-
-        const overlays = gOverlays
+        const overlays = state.graph.gOverlays
           .selectAll("path")
-          .data(overlayData, (item) => item.proposition.id)
-          .join(
-            (enter) =>
-              enter
-                .append("path")
-                .attr("fill", (item) => propositionColor(item.proposition))
-                .attr("fill-opacity", 0.09)
-                .attr("stroke", (item) => propositionColor(item.proposition))
-                .attr("stroke-opacity", 0.34)
-                .attr("stroke-width", 1.2),
-            (update) => update,
-            (exit) => exit.remove()
-          );
+          .data(overlaysData, (item) => item.proposition.id)
+          .join("path")
+          .attr("fill", (item) => propositionColor(item.proposition))
+          .attr("fill-opacity", 0.09)
+          .attr("stroke", (item) => propositionColor(item.proposition))
+          .attr("stroke-opacity", 0.34)
+          .attr("stroke-width", 1.2);
+
+        nodeGroups.on("click", (_, node) => {
+          state.graph.selectedNodeId = node.id;
+          renderEvidenceNetwork(project);
+        });
 
         simulation.on("tick", () => {
           links
@@ -1158,161 +1281,94 @@
 
           const nodeById = new Map(nodes.map((node) => [node.id, node]));
           overlays.attr("d", (item) => {
-            const points = item.evidenceIds
-              .map((id) => nodeById.get(id))
-              .filter(Boolean)
-              .map((node) => [node.x, node.y]);
-
+            const points = item.evidenceIds.map((id) => nodeById.get(id)).filter(Boolean).map((node) => [node.x, node.y]);
             if (!points.length) return "";
             if (points.length === 1) {
               const [x, y] = points[0];
-              const radius = 21;
-              return `M ${x - radius},${y} a ${radius},${radius} 0 1,0 ${radius * 2},0 a ${radius},${radius} 0 1,0 ${-radius * 2},0`;
+              const r = 21;
+              return `M ${x - r},${y} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
             }
             if (points.length === 2) {
               const cx = (points[0][0] + points[1][0]) / 2;
               const cy = (points[0][1] + points[1][1]) / 2;
               const dx = points[0][0] - points[1][0];
               const dy = points[0][1] - points[1][1];
-              const radius = Math.max(18, Math.sqrt(dx * dx + dy * dy) / 2 + 10);
-              return `M ${cx - radius},${cy} a ${radius},${radius} 0 1,0 ${radius * 2},0 a ${radius},${radius} 0 1,0 ${-radius * 2},0`;
+              const r = Math.max(18, Math.sqrt(dx * dx + dy * dy) / 2 + 10);
+              return `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 ${-r * 2},0`;
             }
             const hull = d3.polygonHull(points);
             if (!hull) return "";
-            return `M ${hull.map((point) => `${point[0]},${point[1]}`).join(" L ")} Z`;
+            return `M ${hull.map((p) => `${p[0]},${p[1]}`).join(" L ")} Z`;
           });
 
           for (const node of nodes) {
-            state.graph.nodePositions.set(node.id, {
-              x: node.x,
-              y: node.y,
-              vx: node.vx,
-              vy: node.vy,
-            });
+            state.graph.nodePositions.set(node.id, { x: node.x, y: node.y, vx: node.vx, vy: node.vy });
           }
         });
 
-        const selectedNode = state.graph.nodeById.get(state.graph.selectedNodeId) || null;
-        renderSelectedEvidence(selectedNode, project, propositionMap);
-        renderOverlayList(project);
-        els.graphSummary.textContent = `Evidence nodes: ${nodes.length}. Similarity edges: ${edges.length}. Selected threshold: 0.70.`;
+        const selected = state.graph.nodeById.get(state.graph.selectedNodeId) || nodes[0];
+        renderSelectedNetworkNode(selected, propositionMap);
+        renderNetworkMapDetails(project);
+        els.graphSummary.textContent = `Evidence nodes: ${nodes.length}. Similarity edges: ${edges.length}. Threshold: 0.70.`;
       }
 
-      function renderSelectedEvidence(node, project, propositionMap) {
+      function renderSelectedNetworkNode(node, propositionMap) {
         if (!node) {
-          els.selectedEvidence.innerHTML = '<div class="mini-card">Click a node to inspect evidence details.</div>';
+          els.selectedEvidence.innerHTML = '<div class="mini-card">No node selected.</div>';
           return;
         }
-
-        const supportingProps = [];
-        for (const propositionId of node.propositionIds || []) {
-          const proposition = propositionMap.get(propositionId);
-          if (proposition) supportingProps.push(proposition);
-        }
-
-        const connections = state.graph.edges
-          .filter((edge) => {
-            const sourceId = edge.source.id || edge.source;
-            const targetId = edge.target.id || edge.target;
-            return sourceId === node.id || targetId === node.id;
-          })
-          .map((edge) => {
-            const sourceId = edge.source.id || edge.source;
-            const targetId = edge.target.id || edge.target;
-            const peerId = sourceId === node.id ? targetId : sourceId;
-            return { peerId, score: edge.score };
-          })
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 4);
-
-        const propsHtml = supportingProps.length
-          ? supportingProps
-              .map((prop) => `${escapeHtml(prop.id)} (${escapeHtml(prop.status)}, conf ${toPct(prop.confidence)})`)
-              .join("<br />")
-          : "No linked propositions";
-
-        const connectionsHtml = connections.length
-          ? connections
-              .map((item) => `${escapeHtml(item.peerId)} (score ${item.score.toFixed(2)})`)
-              .join("<br />")
-          : "No strong edges";
-
-        const tagsText = Array.from(node.tags || []).join(", ");
+        const linkedProps = Array.from(node.propositionIds || []).map((id) => propositionMap.get(id)).filter(Boolean);
+        const propsText = linkedProps.length ? linkedProps.map((prop) => `${prop.id} (${prop.status}, ${toPct(prop.confidence)})`).join("<br/>") : "none";
 
         els.selectedEvidence.innerHTML = `
-          <div class="mini-card">
-            <strong>${escapeHtml(node.id)}</strong><br />
-            interview: ${escapeHtml(node.interviewId || "unknown")}<br />
-            degree: ${node.degree}
-          </div>
-          <div class="mini-card">
-            <strong>Factor -> Mechanism -> Outcome</strong><br />
-            ${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}
-          </div>
-          <div class="mini-card">
-            <strong>Quote</strong><br />
-            ${escapeHtml(node.quote || "")}
-          </div>
-          <div class="mini-card">
-            <strong>Tags</strong><br />
-            ${escapeHtml(tagsText || "none")}
-          </div>
-          <div class="mini-card">
-            <strong>Linked propositions</strong><br />
-            ${propsHtml}
-          </div>
-          <div class="mini-card">
-            <strong>Strongest connections</strong><br />
-            ${connectionsHtml}
-          </div>
+          <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>interview: ${escapeHtml(node.interviewId || "unknown")}<br/>degree: ${node.degree}</div>
+          <div class="mini-card"><strong>Quote</strong><br/>${escapeHtml(node.quote || "")}</div>
+          <div class="mini-card"><strong>F-M-O</strong><br/>${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}</div>
+          <div class="mini-card"><strong>Linked hypotheses</strong><br/>${propsText}</div>
         `;
       }
 
-      function renderOverlayList(project) {
+      function renderNetworkMapDetails(project) {
         const propositions = project.proposition_store || [];
         if (!propositions.length) {
-          els.overlayList.innerHTML = '<div class="mini-card">No propositions yet.</div>';
+          els.overlayList.innerHTML = '<div class="mini-card">No hypotheses yet.</div>';
           return;
         }
-
         els.overlayList.innerHTML = propositions
           .slice(0, 12)
           .map((prop) => {
             const color = propositionColor(prop);
-            return `
-              <div class="mini-card" style="border-left:4px solid ${color};">
-                <strong>${escapeHtml(prop.id)}</strong> • ${escapeHtml(prop.status)} • conf ${toPct(prop.confidence)}<br />
-                <span class="muted">${escapeHtml(prop.factor || "")}</span><br />
-                support ${prop.supporting_evidence?.length || 0} / contradict ${prop.contradicting_evidence?.length || 0}
-              </div>
-            `;
+            return `<div class="mini-card" style="border-left:4px solid ${color};"><strong>${escapeHtml(prop.id)}</strong> - ${escapeHtml(prop.status)} - conf ${toPct(prop.confidence)}<br/><span class="muted">${escapeHtml(prop.factor || "")}</span><br/>support ${prop.supporting_evidence?.length || 0} / contradict ${prop.contradicting_evidence?.length || 0}</div>`;
           })
           .join("");
+      }
+
+      function renderGraph(project) {
+        ensureGraphInitialized();
+        setGraphLegend(state.visualMode);
+        if (state.visualMode === "hypothesis") {
+          renderHypothesisMap(project);
+          return;
+        }
+        renderEvidenceNetwork(project);
       }
 
       function parseMarkdownSections(markdown) {
         const lines = String(markdown || "").split("\n");
         const sections = [];
         let current = { title: "Overview", body: [] };
-
         for (const line of lines) {
-          const heading2 = line.match(/^##\s+(.+)/);
-          const heading3 = line.match(/^###\s+(.+)/);
-          if (heading2 || heading3) {
-            if (current.body.length) {
-              sections.push({ title: current.title, body: current.body.join("\n").trim() });
-            }
-            current = { title: (heading2 || heading3)[1].trim(), body: [] };
+          const h2 = line.match(/^##\s+(.+)/);
+          const h3 = line.match(/^###\s+(.+)/);
+          if (h2 || h3) {
+            if (current.body.length) sections.push({ title: current.title, body: current.body.join("\n").trim() });
+            current = { title: (h2 || h3)[1].trim(), body: [] };
           } else {
             current.body.push(line);
           }
         }
-
-        if (current.body.length) {
-          sections.push({ title: current.title, body: current.body.join("\n").trim() });
-        }
-
-        return sections.filter((section) => section.body);
+        if (current.body.length) sections.push({ title: current.title, body: current.body.join("\n").trim() });
+        return sections.filter((item) => item.body);
       }
 
       function renderReport(project) {
@@ -1324,7 +1380,7 @@
         }
 
         const generatedAt = project.report_generated_at || "unknown";
-        const staleText = project.report_stale ? " • stale" : "";
+        const staleText = project.report_stale ? " - stale" : "";
         setStatus(els.reportStatus, `Report generated: ${generatedAt}${staleText}`);
 
         if (els.rawToggle.checked) {
@@ -1334,14 +1390,12 @@
 
         const sections = parseMarkdownSections(project.report_markdown);
         els.reportView.innerHTML = sections
-          .map(
-            (section, index) => `
-              <details ${index === 0 ? "open" : ""}>
-                <summary>${escapeHtml(section.title)}</summary>
-                <div class="mono" style="white-space:pre-wrap; margin-top:8px; line-height:1.5;">${escapeHtml(section.body)}</div>
-              </details>
-            `
-          )
+          .map((section, index) => `
+            <details ${index === 0 ? "open" : ""}>
+              <summary>${escapeHtml(section.title)}</summary>
+              <div class="mono" style="white-space:pre-wrap; overflow-wrap:anywhere; margin-top:8px; line-height:1.5;">${escapeHtml(section.body)}</div>
+            </details>
+          `)
           .join("");
       }
 
@@ -1355,12 +1409,9 @@
       }
 
       function disconnectSSE() {
-        if (state.sse) {
-          state.sse.close();
-        }
+        if (state.sse) state.sse.close();
         state.sse = null;
         state.sseConnected = false;
-        renderLivePill();
       }
 
       function connectSSE(projectId) {
@@ -1372,12 +1423,10 @@
 
         source.onopen = () => {
           state.sseConnected = true;
-          renderLivePill();
         };
 
         source.onerror = () => {
           state.sseConnected = false;
-          renderLivePill();
         };
 
         [
@@ -1389,16 +1438,16 @@
           "project_stats",
           "report_ready",
           "report_stale",
-        ].forEach((eventName) => {
-          source.addEventListener(eventName, () => scheduleProjectRefresh());
-        });
+          "prompt_sanitized",
+          "topic_redirect_applied",
+          "visualization_model_ready",
+        ].forEach((eventName) => source.addEventListener(eventName, () => scheduleProjectRefresh()));
       }
 
       function ensurePollingFallback() {
         if (state.pollingTimer) return;
         state.pollingTimer = setInterval(async () => {
-          if (!state.selectedProjectId) return;
-          if (state.sseConnected) return;
+          if (!state.selectedProjectId || state.sseConnected) return;
           await loadProject(state.selectedProjectId, { silent: true });
           await refreshCards({ silent: true });
         }, 10000);
@@ -1440,11 +1489,14 @@
         try {
           const agentId = els.agentId.value.trim();
           const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
-          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
+          const result = await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setStatus(els.controlStatus, "Project started. Interview link is ready.");
+          setStatus(
+            els.controlStatus,
+            `Project started. prompt safety: ${result.prompt_safety_status || "ok"} (${result.prompt_safety_violations_count || 0}).`
+          );
           await loadProject(state.selectedProjectId, { silent: true });
           await refreshCards({ silent: true });
           connectSSE(state.selectedProjectId);
@@ -1461,11 +1513,7 @@
 
         const project = state.selectedProject;
         if (!project || (project.interview_store || []).length === 0 || (project.evidence_store || []).length === 0) {
-          setStatus(
-            els.controlStatus,
-            "Cannot finish yet: no ingested transcript/evidence. Complete one call and wait for webhook ingestion.",
-            true
-          );
+          setStatus(els.controlStatus, "Cannot finish yet: no ingested transcript/evidence.", true);
           return;
         }
 
@@ -1479,24 +1527,32 @@
         }
       }
 
+      function switchMode(mode) {
+        state.visualMode = mode;
+        els.modeHypothesisBtn.classList.toggle("active", mode === "hypothesis");
+        els.modeNetworkBtn.classList.toggle("active", mode === "network");
+        if (state.selectedProject) {
+          renderGraph(state.selectedProject);
+        }
+      }
+
       els.createProjectBtn.onclick = createProject;
       els.startBtn.onclick = startResearch;
       els.finishBtn.onclick = finishResearch;
+      els.modeHypothesisBtn.onclick = () => switchMode("hypothesis");
+      els.modeNetworkBtn.onclick = () => switchMode("network");
       els.rawToggle.onchange = () => {
-        if (state.selectedProject) {
-          renderReport(state.selectedProject);
-        }
+        if (state.selectedProject) renderReport(state.selectedProject);
       };
 
       async function boot() {
-        await checkHealth();
-        renderLivePill();
         await refreshCards({ silent: true });
 
         if (state.selectedProjectId) {
           await selectProject(state.selectedProjectId, { silent: true });
         }
 
+        switchMode("hypothesis");
         ensurePollingFallback();
         ensureCardsRefreshLoop();
       }

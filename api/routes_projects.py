@@ -17,6 +17,7 @@ from api.deps import (
     get_elevenlabs_service,
     get_pipeline,
     get_project_service,
+    get_script_safety,
     get_settings,
     get_sse_manager,
     get_synthesizer_agent,
@@ -32,7 +33,9 @@ from services.project_service import (
     ProjectNotFoundError,
     ProjectService,
 )
+from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
+from services.visualization import build_hypothesis_map
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -98,6 +101,8 @@ def _project_stats(project: ProjectState) -> dict:
         "novelty_rate": project.metrics.novelty_rate,
         "mode": project.metrics.mode,
         "report_stale": project.report_stale,
+        "prompt_safety_status": project.prompt_safety_status,
+        "prompt_safety_violations_count": project.prompt_safety_violations_count,
     }
 
 
@@ -276,6 +281,7 @@ async def start_project(
     project_service: ProjectService = Depends(get_project_service),
     designer: DesignerAgent = Depends(get_designer_agent),
     elevenlabs: ElevenLabsService = Depends(get_elevenlabs_service),
+    script_safety: ScriptSafetyGuard = Depends(get_script_safety),
     settings: Settings = Depends(get_settings),
     sse: SSEManager = Depends(get_sse_manager),
 ) -> dict:
@@ -352,13 +358,36 @@ async def start_project(
                 )
             )
 
-    project.script_versions = []
-    project_service.add_script(project, script)
-
     agent_id = payload.elevenlabs_agent_id or project.elevenlabs_agent_id or settings.elevenlabs_agent_id
     if agent_id:
+        active_project = project_service.find_active_project_for_agent(
+            agent_id=agent_id,
+            exclude_project_id=project.id,
+        )
+        if active_project:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Agent '{agent_id}' is already used by active project '{active_project}'",
+            )
         project.elevenlabs_agent_id = agent_id
         project.talk_to_link = elevenlabs.get_talk_to_link(agent_id)
+
+    safety_result = script_safety.enforce(
+        script=script,
+        research_question=project.research_question,
+        propositions=project.proposition_store,
+    )
+    script = safety_result.script
+    project.prompt_safety_status = safety_result.status
+    project.prompt_safety_violations_count = safety_result.violations_count
+    if safety_result.status in {"sanitized", "fallback"}:
+        marker = f"safety_guard={safety_result.status} violations={safety_result.violations_count}"
+        summary = script.changes_summary.strip() or "Script initialized"
+        if marker not in summary:
+            script.changes_summary = f"{summary} [{marker}]"
+
+    project.script_versions = []
+    project_service.add_script(project, script)
 
     project.sync_pending = False
     project.sync_pending_script_version = None
@@ -368,6 +397,7 @@ async def start_project(
         prompt = designer.build_interviewer_prompt(script)
         try:
             await elevenlabs.update_agent_prompt(project.elevenlabs_agent_id, prompt)
+            project.last_prompt_update_at = datetime.now(timezone.utc)
         except Exception:
             project.sync_pending = True
             project.sync_pending_script_version = script.version
@@ -382,9 +412,33 @@ async def start_project(
             "status": project.status,
             "report_stale": project.report_stale,
             "sync_pending": project.sync_pending,
+            "prompt_safety_status": project.prompt_safety_status,
+            "prompt_safety_violations_count": project.prompt_safety_violations_count,
         },
     )
     await sse.emit(project.id, "project_stats", _project_stats(project))
+    if safety_result.status in {"sanitized", "fallback"}:
+        await sse.emit(
+            project.id,
+            "prompt_sanitized",
+            {
+                "project_id": project.id,
+                "script_version": script.version,
+                "status": safety_result.status,
+                "violations_count": safety_result.violations_count,
+            },
+        )
+    if safety_result.topic_redirect_applied:
+        await sse.emit(
+            project.id,
+            "topic_redirect_applied",
+            {"project_id": project.id, "script_version": script.version},
+        )
+    await sse.emit(
+        project.id,
+        "visualization_model_ready",
+        {"project_id": project.id, "reason": "project_started"},
+    )
 
     response = {
         "project_id": project.id,
@@ -393,6 +447,8 @@ async def start_project(
         "propositions": len(project.proposition_store),
         "sync_pending": project.sync_pending,
         "project_status": project.status,
+        "prompt_safety_status": project.prompt_safety_status,
+        "prompt_safety_violations_count": project.prompt_safety_violations_count,
     }
     if project.talk_to_link:
         response["talk_to_link"] = project.talk_to_link
@@ -462,6 +518,18 @@ def get_qrcode(
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@router.get("/{project_id}/visualization/hypothesis-map", status_code=status.HTTP_200_OK)
+def get_hypothesis_map(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+) -> dict:
+    try:
+        project = project_service.load_project(project_id)
+    except ProjectNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    return build_hypothesis_map(project)
 
 
 @router.post("/{project_id}/simulate", status_code=status.HTTP_200_OK)

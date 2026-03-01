@@ -9,6 +9,7 @@ from config import Settings
 from services.elevenlabs_service import ElevenLabsService
 from services.pipeline import Pipeline
 from services.project_service import ProjectService
+from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
 
 
@@ -42,3 +43,7 @@ def get_pipeline(request: Request) -> Pipeline:
 
 def get_elevenlabs_service(request: Request) -> ElevenLabsService:
     return request.app.state.elevenlabs_service
+
+
+def get_script_safety(request: Request) -> ScriptSafetyGuard:
+    return request.app.state.script_safety

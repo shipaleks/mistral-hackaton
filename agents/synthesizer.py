@@ -54,10 +54,12 @@ class SynthesizerAgent:
         except Exception as err:
             llm_error = err
 
-        if llm_report and self._is_grounded(llm_report, project):
+        if llm_report and self._is_grounded(llm_report, project) and not self._has_non_english_quotes(
+            llm_report
+        ):
             return llm_report
 
-        reason = "LLM generation failed" if llm_error else "LLM output was not grounded in evidence"
+        reason = "LLM generation failed" if llm_error else "LLM output was not grounded/safe"
         return self._grounded_fallback_report(project, reason, quote_translations)
 
     def _is_grounded(self, report: str, project: ProjectState) -> bool:
@@ -105,6 +107,16 @@ class SynthesizerAgent:
             re.findall(r"\[original:\s*'(.*?)'\s*\]", report, flags=re.IGNORECASE | re.DOTALL)
         )
         return [m.strip() for m in matches if m and m.strip()]
+
+    def _has_non_english_quotes(self, report: str) -> bool:
+        cleaned = re.sub(
+            r"\[original:\s*(\".*?\"|'.*?')\s*\]",
+            "",
+            report,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        # Reject clearly non-English scripts outside explicit original markers.
+        return bool(re.search(r"[А-Яа-яЁё\u3040-\u30ff\u3400-\u9fff]", cleaned))
 
     async def _translate_quotes_to_english(self, project: ProjectState) -> dict[str, str]:
         translations: dict[str, str] = {}

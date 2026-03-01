@@ -76,6 +76,41 @@ class FakeDesigner:
         return f"SCRIPT {script.version}"
 
 
+class PersonalizingDesigner(FakeDesigner):
+    async def update_script(self, *args, **kwargs):
+        prev = kwargs["previous_script"]
+        return InterviewScript(
+            version=prev.version + 1,
+            generated_after_interview="INT_001",
+            research_question=prev.research_question,
+            opening_question="Earlier you mentioned issues. Can we continue?",
+            sections=[
+                ScriptSection(
+                    proposition_id="P001",
+                    priority="high",
+                    instruction="CHALLENGE",
+                    main_question="Earlier, you mentioned working alone. How did that feel?",
+                    probes=["You said your project implementation changed. Why?"],
+                    context="Earlier you mentioned details",
+                )
+            ],
+            closing_question="From what you said before, what else?",
+            wildcard="Anything else you told me earlier?",
+            mode="convergent",
+            convergence_score=0.8,
+            novelty_rate=0.2,
+            changes_summary="Updated with memory",
+        )
+
+    def build_interviewer_prompt(self, script):
+        return (
+            f"OPEN={script.opening_question}\n"
+            f"Q={script.sections[0].main_question}\n"
+            f"P={script.sections[0].probes[0]}\n"
+            f"CLOSE={script.closing_question}"
+        )
+
+
 class FakeElevenLabs:
     def __init__(self):
         self.calls = []
@@ -162,3 +197,78 @@ async def test_pipeline_idempotency_and_updates(tmp_path):
     assert "new_evidence" in event_names
     assert "proposition_updated" in event_names
     assert "script_updated" in event_names
+
+
+@pytest.mark.asyncio
+async def test_pipeline_sanitizes_personalized_prompt_before_sync(tmp_path):
+    project_service = ProjectService(tmp_path)
+    project = project_service.create_project("demo", "What is your experience?")
+    project.elevenlabs_agent_id = "agent_123"
+    project.proposition_store = [
+        Proposition(
+            id="P001",
+            factor="team pressure",
+            mechanism="coordination constraints",
+            outcome="stress",
+            confidence=0.3,
+            status="exploring",
+        )
+    ]
+    project.script_versions = [
+        InterviewScript(
+            version=1,
+            research_question=project.research_question,
+            opening_question="Open",
+            sections=[
+                ScriptSection(
+                    proposition_id="P001",
+                    priority="high",
+                    instruction="EXPLORE",
+                    main_question="How was teamwork?",
+                    probes=["Example?"],
+                    context="",
+                )
+            ],
+            closing_question="Close",
+            wildcard="Anything else?",
+            mode="divergent",
+            convergence_score=0.2,
+            novelty_rate=0.7,
+            changes_summary="Init",
+        )
+    ]
+    project_service.save_project(project)
+
+    sse = SSEManager()
+    queue = sse.subscribe("demo")
+    elevenlabs = FakeElevenLabs()
+
+    pipeline = Pipeline(
+        project_service=project_service,
+        analyst=FakeAnalyst(),
+        designer=PersonalizingDesigner(),
+        elevenlabs=elevenlabs,
+        sse=sse,
+    )
+
+    result = await pipeline.process_interview(
+        project_id="demo",
+        transcript="User: We learned fast",
+        conversation_id="conv-2",
+    )
+
+    assert result["status"] == "processed"
+    assert elevenlabs.calls
+    _, prompt = elevenlabs.calls[-1]
+    assert "earlier you mentioned" not in prompt.lower()
+    assert "you said" not in prompt.lower()
+
+    saved = project_service.load_project("demo")
+    assert saved.prompt_safety_status in {"sanitized", "fallback"}
+    assert saved.prompt_safety_violations_count > 0
+
+    events = []
+    while not queue.empty():
+        events.append(await queue.get())
+    names = [item["event"] for item in events]
+    assert "prompt_sanitized" in names

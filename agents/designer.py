@@ -60,11 +60,12 @@ class DesignerAgent:
         previous_script: InterviewScript,
         metrics: dict[str, Any],
     ) -> InterviewScript:
+        evidence_briefing = self._build_evidence_briefing(propositions=propositions, evidence=evidence)
         payload = {
             "task": "Update interview script based on current state",
             "research_question": research_question,
             "propositions": [p.model_dump(mode="json") for p in propositions],
-            "evidence": [e.model_dump(mode="json") for e in evidence],
+            "evidence_briefing": evidence_briefing,
             "previous_script": previous_script.model_dump(mode="json"),
             "metrics": metrics,
             "max_sections": self.max_sections,
@@ -146,6 +147,53 @@ class DesignerAgent:
         rendered = rendered.replace("{closing_question}", script.closing_question)
         rendered = rendered.replace("{wildcard_question}", script.wildcard)
         return rendered
+
+    def _build_evidence_briefing(self, propositions: list[Proposition], evidence: list) -> dict[str, Any]:
+        interview_ids = sorted(
+            {
+                str(getattr(item, "interview_id", "")).strip()
+                for item in evidence
+                if str(getattr(item, "interview_id", "")).strip()
+            }
+        )
+        proposition_brief = []
+        mapped_evidence_ids: set[str] = set()
+
+        for proposition in propositions:
+            support_ids = [x for x in proposition.supporting_evidence if x]
+            contradict_ids = [x for x in proposition.contradicting_evidence if x]
+            mapped_evidence_ids.update(support_ids)
+            mapped_evidence_ids.update(contradict_ids)
+            proposition_brief.append(
+                {
+                    "id": proposition.id,
+                    "factor": proposition.factor,
+                    "mechanism": proposition.mechanism,
+                    "outcome": proposition.outcome,
+                    "status": proposition.status,
+                    "confidence": proposition.confidence,
+                    "support_count": len(support_ids),
+                    "contradict_count": len(contradict_ids),
+                }
+            )
+
+        unassigned_count = 0
+        total_evidence = 0
+        for item in evidence:
+            evidence_id = str(getattr(item, "id", "")).strip()
+            if not evidence_id:
+                continue
+            total_evidence += 1
+            if evidence_id not in mapped_evidence_ids:
+                unassigned_count += 1
+
+        return {
+            "total_evidence": total_evidence,
+            "interviews_count": len(interview_ids),
+            "unassigned_evidence_count": unassigned_count,
+            "proposition_coverage": proposition_brief,
+            "note": "Briefing is aggregate only; no respondent-specific quotes or personal references.",
+        }
 
     def _parse_propositions(self, items: list[dict[str, Any]]) -> list[Proposition]:
         propositions: list[Proposition] = []

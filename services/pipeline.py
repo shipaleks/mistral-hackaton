@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from agents.analyst import AnalystAgent
@@ -8,6 +9,7 @@ from models.analysis import AnalysisResult
 from models.interview import Interview
 from services.elevenlabs_service import ElevenLabsService
 from services.project_service import ProjectService
+from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
 
 
@@ -19,12 +21,14 @@ class Pipeline:
         designer: DesignerAgent,
         elevenlabs: ElevenLabsService,
         sse: SSEManager,
+        script_safety: ScriptSafetyGuard | None = None,
     ) -> None:
         self.project_service = project_service
         self.analyst = analyst
         self.designer = designer
         self.elevenlabs = elevenlabs
         self.sse = sse
+        self.script_safety = script_safety or ScriptSafetyGuard()
 
     async def process_interview(
         self,
@@ -88,6 +92,21 @@ class Pipeline:
             )
             new_script.changes_summary = "Fallback script generated after designer failure"
 
+        safety_result = self.script_safety.enforce(
+            script=new_script,
+            research_question=project.research_question,
+            propositions=project.proposition_store,
+        )
+        new_script = safety_result.script
+        project.prompt_safety_status = safety_result.status
+        project.prompt_safety_violations_count = safety_result.violations_count
+
+        if safety_result.status in {"sanitized", "fallback"}:
+            marker = f"safety_guard={safety_result.status} violations={safety_result.violations_count}"
+            if marker not in new_script.changes_summary:
+                summary = new_script.changes_summary.strip() or "Script updated"
+                new_script.changes_summary = f"{summary} [{marker}]"
+
         self.project_service.add_script(project, new_script)
 
         project.sync_pending = False
@@ -96,6 +115,7 @@ class Pipeline:
             full_prompt = self.designer.build_interviewer_prompt(new_script)
             try:
                 await self.elevenlabs.update_agent_prompt(project.elevenlabs_agent_id, full_prompt)
+                project.last_prompt_update_at = datetime.now(timezone.utc)
             except Exception:
                 project.sync_pending = True
                 project.sync_pending_script_version = new_script.version
@@ -113,8 +133,32 @@ class Pipeline:
                 "version": new_script.version,
                 "changes_summary": new_script.changes_summary,
                 "sync_pending": project.sync_pending,
+                "prompt_safety_status": project.prompt_safety_status,
+                "prompt_safety_violations_count": project.prompt_safety_violations_count,
             },
         )
+
+        if safety_result.status in {"sanitized", "fallback"}:
+            await self.sse.emit(
+                project_id,
+                "prompt_sanitized",
+                {
+                    "project_id": project.id,
+                    "script_version": new_script.version,
+                    "status": safety_result.status,
+                    "violations_count": safety_result.violations_count,
+                },
+            )
+
+        if safety_result.topic_redirect_applied:
+            await self.sse.emit(
+                project_id,
+                "topic_redirect_applied",
+                {
+                    "project_id": project.id,
+                    "script_version": new_script.version,
+                },
+            )
 
         if report_became_stale:
             await self.sse.emit(
@@ -135,10 +179,17 @@ class Pipeline:
                 "status": project.status,
                 "report_stale": project.report_stale,
                 "sync_pending": project.sync_pending,
+                "prompt_safety_status": project.prompt_safety_status,
+                "prompt_safety_violations_count": project.prompt_safety_violations_count,
             },
         )
 
         await self.sse.emit(project_id, "project_stats", self._build_project_stats(project))
+        await self.sse.emit(
+            project_id,
+            "visualization_model_ready",
+            {"project_id": project.id, "reason": "interview_processed"},
+        )
 
         return {
             "status": "processed",
@@ -223,4 +274,6 @@ class Pipeline:
             "novelty_rate": project.metrics.novelty_rate,
             "mode": project.metrics.mode,
             "report_stale": project.report_stale,
+            "prompt_safety_status": project.prompt_safety_status,
+            "prompt_safety_violations_count": project.prompt_safety_violations_count,
         }
