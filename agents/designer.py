@@ -144,6 +144,7 @@ class DesignerAgent:
         rendered = rendered.replace(
             "{probe_instructions}", "\n".join(probe_lines) if probe_lines else "- Explore emerging themes"
         )
+        rendered = rendered.replace("{research_anchor}", script.research_question)
         rendered = rendered.replace("{closing_question}", script.closing_question)
         rendered = rendered.replace("{wildcard_question}", script.wildcard)
         return rendered
@@ -263,7 +264,7 @@ class DesignerAgent:
             opening_question=str(
                 payload.get(
                     "opening_question",
-                    "Could you share your experience with the hackathon so far?",
+                    "Could you share your experience related to this research question so far?",
                 )
             ),
             sections=sections[: self.max_sections],

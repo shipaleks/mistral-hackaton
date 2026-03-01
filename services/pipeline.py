@@ -11,6 +11,7 @@ from services.elevenlabs_service import ElevenLabsService
 from services.project_service import ProjectService
 from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
+from services.visualization import apply_heuristic_links
 
 
 class Pipeline:
@@ -64,6 +65,8 @@ class Pipeline:
         )
         self._apply_analysis_result(project, result)
         await self.emit_analysis_events(project_id, result)
+
+        heuristic_changed, heuristic_added = apply_heuristic_links(project)
 
         previous_script = project.current_script
         try:
@@ -185,6 +188,15 @@ class Pipeline:
         )
 
         await self.sse.emit(project_id, "project_stats", self._build_project_stats(project))
+        if heuristic_changed:
+            await self.sse.emit(
+                project_id,
+                "heuristic_links_updated",
+                {
+                    "project_id": project.id,
+                    "heuristic_links_added": heuristic_added,
+                },
+            )
         await self.sse.emit(
             project_id,
             "visualization_model_ready",
@@ -207,6 +219,12 @@ class Pipeline:
         for evidence in result.new_evidence:
             if not evidence.id or any(e.id == evidence.id for e in project.evidence_store):
                 evidence.id = self.project_service.next_evidence_id(project)
+            if not str(evidence.quote_english or "").strip():
+                if str(evidence.language or "").lower().startswith("en"):
+                    evidence.quote_english = evidence.quote
+                    evidence.translation_status = "native_en"
+                else:
+                    evidence.translation_status = "pending"
             project.evidence_store.append(evidence)
 
         for new_prop in result.new_propositions:
@@ -227,11 +245,15 @@ class Pipeline:
                     prop.supporting_evidence.append(evidence.id)
                 if evidence.id in prop.contradicting_evidence:
                     prop.contradicting_evidence.remove(evidence.id)
+                if evidence.id in prop.heuristic_supporting_evidence:
+                    prop.heuristic_supporting_evidence.remove(evidence.id)
             elif mapping.relationship == "contradicts":
                 if evidence.id not in prop.contradicting_evidence:
                     prop.contradicting_evidence.append(evidence.id)
                 if evidence.id in prop.supporting_evidence:
                     prop.supporting_evidence.remove(evidence.id)
+                if evidence.id in prop.heuristic_supporting_evidence:
+                    prop.heuristic_supporting_evidence.remove(evidence.id)
 
         for update in result.proposition_updates:
             prop = proposition_index.get(update.id)
@@ -274,6 +296,8 @@ class Pipeline:
             "novelty_rate": project.metrics.novelty_rate,
             "mode": project.metrics.mode,
             "report_stale": project.report_stale,
+            "report_generation_mode": project.report_generation_mode,
+            "report_fallback_reason": project.report_fallback_reason,
             "prompt_safety_status": project.prompt_safety_status,
             "prompt_safety_violations_count": project.prompt_safety_violations_count,
         }

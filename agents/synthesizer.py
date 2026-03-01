@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from typing import Any
 
 from agents.llm_client import LLMClient
 from agents.prompt_loader import load_prompt
+from models.evidence import Evidence
 from models.project import ProjectState
 
 
@@ -15,14 +17,27 @@ class SynthesizerAgent:
         self.system_prompt = load_prompt("synthesizer_system.txt")
 
     async def synthesize(self, project: ProjectState) -> str:
-        if len(project.interview_store) == 0 or len(project.evidence_store) == 0:
-            return self._no_data_report(project)
+        result = await self.synthesize_with_meta(project)
+        return result["report"]
 
-        quote_translations = await self._translate_quotes_to_english(project)
+    async def synthesize_with_meta(self, project: ProjectState) -> dict[str, Any]:
+        if len(project.interview_store) == 0 or len(project.evidence_store) == 0:
+            return {
+                "report": self._no_data_report(project),
+                "is_fallback": True,
+                "fallback_reason": "No interview evidence in project",
+            }
+
+        quote_translations = await self.translate_evidence_quotes(project.evidence_store)
         evidence_payload = []
         for evidence in project.evidence_store:
             item = evidence.model_dump(mode="json")
-            item["quote_english"] = quote_translations.get(evidence.id, evidence.quote.strip())
+            quote_en = str(quote_translations.get(evidence.id, "")).strip()
+            if not quote_en and str(evidence.language or "").lower().startswith("en"):
+                quote_en = evidence.quote.strip()
+            if not quote_en:
+                quote_en = "Translation unavailable"
+            item["quote_english"] = quote_en
             evidence_payload.append(item)
 
         payload = {
@@ -57,10 +72,18 @@ class SynthesizerAgent:
         if llm_report and self._is_grounded(llm_report, project) and not self._has_non_english_quotes(
             llm_report
         ):
-            return llm_report
+            return {
+                "report": llm_report,
+                "is_fallback": False,
+                "fallback_reason": None,
+            }
 
         reason = "LLM generation failed" if llm_error else "LLM output was not grounded/safe"
-        return self._grounded_fallback_report(project, reason, quote_translations)
+        return {
+            "report": self._grounded_fallback_report(project, reason, quote_translations),
+            "is_fallback": True,
+            "fallback_reason": reason,
+        }
 
     def _is_grounded(self, report: str, project: ProjectState) -> bool:
         text = report or ""
@@ -118,11 +141,11 @@ class SynthesizerAgent:
         # Reject clearly non-English scripts outside explicit original markers.
         return bool(re.search(r"[А-Яа-яЁё\u3040-\u30ff\u3400-\u9fff]", cleaned))
 
-    async def _translate_quotes_to_english(self, project: ProjectState) -> dict[str, str]:
+    async def translate_evidence_quotes(self, evidence_items: list[Evidence]) -> dict[str, str]:
         translations: dict[str, str] = {}
         source_quotes: list[dict[str, str]] = []
 
-        for evidence in project.evidence_store:
+        for evidence in evidence_items:
             quote = evidence.quote.strip()
             if not quote:
                 continue
@@ -159,8 +182,6 @@ class SynthesizerAgent:
                 max_tokens=2048,
             )
         except Exception:
-            for item in source_quotes:
-                translations.setdefault(item["id"], item["quote"])
             return translations
 
         items: list[dict] = []
@@ -183,9 +204,6 @@ class SynthesizerAgent:
             ).strip()
             if evidence_id and english:
                 translations[evidence_id] = english
-
-        for item in source_quotes:
-            translations.setdefault(item["id"], item["quote"])
 
         return translations
 
@@ -243,9 +261,13 @@ class SynthesizerAgent:
                     ev = evidence_by_id.get(eid)
                     if ev and ev.quote.strip():
                         original_quote = self._escape_inline_quote(ev.quote)
-                        english_quote = self._escape_inline_quote(
-                            quote_translations.get(ev.id, ev.quote)
-                        )
+                        translated = str(quote_translations.get(ev.id, "")).strip()
+                        if translated:
+                            english_quote = self._escape_inline_quote(translated)
+                        elif str(ev.language or "").lower().startswith("en"):
+                            english_quote = original_quote
+                        else:
+                            english_quote = "Translation unavailable"
                         if self._norm(original_quote) == self._norm(english_quote):
                             quote_lines.append(f"- [{ev.id}] \"{english_quote}\"")
                         else:
@@ -277,7 +299,13 @@ class SynthesizerAgent:
                 f"- [{ev.id}] ({ev.language}) {ev.factor} -> {ev.mechanism} -> {ev.outcome}"
             )
             original_quote = self._escape_inline_quote(ev.quote)
-            english_quote = self._escape_inline_quote(quote_translations.get(ev.id, ev.quote))
+            translated = str(quote_translations.get(ev.id, "")).strip()
+            if translated:
+                english_quote = self._escape_inline_quote(translated)
+            elif str(ev.language or "").lower().startswith("en"):
+                english_quote = original_quote
+            else:
+                english_quote = "Translation unavailable"
             if self._norm(original_quote) == self._norm(english_quote):
                 lines.append(f"  Quote (EN): \"{english_quote}\"")
             else:

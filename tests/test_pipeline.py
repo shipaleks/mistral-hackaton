@@ -119,6 +119,30 @@ class FakeElevenLabs:
         self.calls.append((agent_id, new_prompt))
 
 
+class AnalystNoMapping:
+    async def analyze_interview(self, *args, **kwargs):
+        return AnalysisResult(
+            new_evidence=[
+                Evidence(
+                    id="",
+                    interview_id=kwargs["interview_id"],
+                    quote="We lost focus because of short deadlines",
+                    quote_english="We lost focus because of short deadlines",
+                    translation_status="translated",
+                    interpretation="Deadline pressure reduced focus",
+                    factor="deadline pressure",
+                    mechanism="sleep loss",
+                    outcome="low focus",
+                    tags=["deadline", "focus"],
+                    language="en",
+                )
+            ],
+            evidence_mappings=[],
+            proposition_updates=[],
+            metrics=AnalysisMetrics(convergence_score=0.3, novelty_rate=0.6, mode="divergent"),
+        )
+
+
 @pytest.mark.asyncio
 async def test_pipeline_idempotency_and_updates(tmp_path):
     project_service = ProjectService(tmp_path)
@@ -272,3 +296,75 @@ async def test_pipeline_sanitizes_personalized_prompt_before_sync(tmp_path):
         events.append(await queue.get())
     names = [item["event"] for item in events]
     assert "prompt_sanitized" in names
+
+
+@pytest.mark.asyncio
+async def test_pipeline_adds_heuristic_links_without_touching_confirmed(tmp_path):
+    project_service = ProjectService(tmp_path)
+    project = project_service.create_project("demo", "What affects participant focus?")
+    project.elevenlabs_agent_id = "agent_123"
+    project.proposition_store = [
+        Proposition(
+            id="P001",
+            factor="deadline pressure",
+            mechanism="sleep loss",
+            outcome="low focus",
+            confidence=0.2,
+            status="exploring",
+            supporting_evidence=[],
+            contradicting_evidence=[],
+        )
+    ]
+    project.script_versions = [
+        InterviewScript(
+            version=1,
+            research_question=project.research_question,
+            opening_question="Open",
+            sections=[
+                ScriptSection(
+                    proposition_id="P001",
+                    priority="high",
+                    instruction="EXPLORE",
+                    main_question="How do deadlines affect your focus?",
+                    probes=["Example?"],
+                    context="",
+                )
+            ],
+            closing_question="Close",
+            wildcard="Any more?",
+            mode="divergent",
+            convergence_score=0.2,
+            novelty_rate=0.7,
+            changes_summary="Init",
+        )
+    ]
+    project_service.save_project(project)
+
+    sse = SSEManager()
+    queue = sse.subscribe("demo")
+
+    pipeline = Pipeline(
+        project_service=project_service,
+        analyst=AnalystNoMapping(),
+        designer=FakeDesigner(),
+        elevenlabs=FakeElevenLabs(),
+        sse=sse,
+    )
+
+    result = await pipeline.process_interview(
+        project_id="demo",
+        transcript="User: deadlines destroyed focus",
+        conversation_id="conv-h1",
+    )
+
+    assert result["status"] == "processed"
+    saved = project_service.load_project("demo")
+    prop = saved.proposition_store[0]
+    assert prop.supporting_evidence == []
+    assert len(prop.heuristic_supporting_evidence) >= 1
+
+    events = []
+    while not queue.empty():
+        events.append(await queue.get())
+    names = [item["event"] for item in events]
+    assert "heuristic_links_updated" in names

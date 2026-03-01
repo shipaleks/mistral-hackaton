@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eidetic Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <style>
+      :root {
+        --ink: #23262c;
+        --paper: #faf8f2;
+        --line: #d9d6cc;
+        --panel: #fffdf9;
+        --accent: #ff7043;
+        --ok: #14c985;
+        --warn: #ffca28;
+        --danger: #d43f35;
+        --blue: #338df5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", "Avenir Next", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, #fff2ea 0%, var(--paper) 45%, #f4f3ed 100%);
+      }
+
+      .page {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .top {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .muted {
+        font-size: 12px;
+        color: #66635e;
+      }
+
+      button,
+      a.button {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        padding: 8px 12px;
+        font-size: 13px;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button.active {
+        border-color: var(--blue);
+        box-shadow: inset 0 0 0 1px var(--blue);
+      }
+
+      .content {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 10px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 10px;
+      }
+
+      #graph {
+        width: 100%;
+        height: calc(100vh - 130px);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .side {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        padding: 10px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+        max-height: calc(100vh - 130px);
+        overflow: auto;
+      }
+
+      .mini {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .status {
+        font-size: 12px;
+        min-height: 18px;
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+        font-size: 12px;
+      }
+
+      .dot {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .dot::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      @media (max-width: 1180px) {
+        .content {
+          grid-template-columns: 1fr;
+        }
+
+        #graph {
+          height: 580px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="top">
+        <div>
+          <div><strong id="title">Graph View</strong></div>
+          <div class="muted" id="subtitle">Loading project...</div>
+        </div>
+        <div class="row">
+          <a class="button" href="/">Back to workspace</a>
+          <button id="reloadBtn">Reload</button>
+          <button id="hypothesisBtn" class="active">Hypothesis Map</button>
+          <button id="networkBtn">Evidence Network</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div>
+          <svg id="graph"></svg>
+          <div class="legend" id="legend"></div>
+        </div>
+        <aside class="side">
+          <div class="mini" id="summary">No data yet.</div>
+          <div>
+            <strong>Selected Item</strong>
+            <div id="selected" class="row" style="display:grid; gap:8px; margin-top:8px;"></div>
+          </div>
+          <div>
+            <strong>Research Progress</strong>
+            <div id="progress" class="row" style="display:grid; gap:8px; margin-top:8px;"></div>
+          </div>
+          <div class="status" id="status"></div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const projectId = params.get("project_id") || "";
+
+      const state = {
+        project: null,
+        map: null,
+        mode: params.get("mode") === "network" ? "network" : "hypothesis",
+        sse: null,
+        graph: {
+          svg: null,
+          gLinks: null,
+          gNodes: null,
+          gEmpty: null,
+          simulation: null,
+          selectedNodeId: null,
+          nodePositions: new Map(),
+        },
+      };
+
+      const els = {
+        title: document.getElementById("title"),
+        subtitle: document.getElementById("subtitle"),
+        reloadBtn: document.getElementById("reloadBtn"),
+        hypothesisBtn: document.getElementById("hypothesisBtn"),
+        networkBtn: document.getElementById("networkBtn"),
+        graph: document.getElementById("graph"),
+        legend: document.getElementById("legend"),
+        summary: document.getElementById("summary"),
+        selected: document.getElementById("selected"),
+        progress: document.getElementById("progress"),
+        status: document.getElementById("status"),
+      };
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function setStatus(text, isError = false) {
+        els.status.textContent = text;
+        els.status.classList.toggle("error", Boolean(isError));
+      }
+
+      async function api(path) {
+        const response = await fetch(path, { headers: { "Content-Type": "application/json" } });
+        const text = await response.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = text;
+        }
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
+        }
+        return data;
+      }
+
+      function ensureGraph() {
+        if (state.graph.svg) return;
+        const svg = d3.select(els.graph);
+        state.graph.svg = svg;
+        state.graph.gLinks = svg.append("g");
+        state.graph.gNodes = svg.append("g");
+        state.graph.gEmpty = svg.append("g");
+      }
+
+      function clearGraph() {
+        state.graph.gLinks.selectAll("*").remove();
+        state.graph.gNodes.selectAll("*").remove();
+        state.graph.gEmpty.selectAll("*").remove();
+      }
+
+      function renderEmpty(text) {
+        clearGraph();
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 700;
+        state.graph.svg.attr("viewBox", `0 0 ${width} ${height}`);
+        state.graph.gEmpty
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", height / 2)
+          .attr("text-anchor", "middle")
+          .attr("fill", "#6b7280")
+          .text(text);
+      }
+
+      function renderSelected(map, nodeId) {
+        const node = (map.nodes || []).find((item) => item.id === nodeId);
+        if (!node) {
+          els.selected.innerHTML = '<div class="mini">Click a node to inspect details.</div>';
+          return;
+        }
+
+        if (node.type === "hypothesis") {
+          const links = (map.edges || []).filter((edge) => edge.source === node.id);
+          const snippets = links.slice(0, 3).map((edge) => {
+            const ev = (map.nodes || []).find((item) => item.id === edge.target);
+            if (!ev) return "";
+            return `<div class="mini"><strong>${escapeHtml(ev.id)}</strong><br/>${escapeHtml(ev.display_quote_en || ev.label || "")}<br/><span class="muted">${escapeHtml(edge.explanation || "")}</span></div>`;
+          }).join("");
+
+          els.selected.innerHTML = `
+            <div class="mini"><strong>${escapeHtml(node.id)}</strong><br/>${escapeHtml(node.label || "")}</div>
+            <div class="mini">status: ${escapeHtml(node.status || "")}, confidence: ${Math.round((Number(node.confidence) || 0) * 100)}%</div>
+            <div class="mini">confirmed supports: ${node.support_count || 0}, contradicts: ${node.contradict_count || 0}, heuristic supports: ${node.heuristic_support_count || 0}</div>
+            ${snippets || '<div class="mini">No linked evidence yet.</div>'}
+          `;
+          return;
+        }
+
+        const evidenceEdges = (map.edges || []).filter((edge) => edge.target === node.id);
+        const why = evidenceEdges.slice(0, 4).map((edge) => `${edge.source} (${edge.source_type}): ${edge.explanation || edge.relation}`).join("<br/>");
+        els.selected.innerHTML = `
+          <div class="mini"><strong>${escapeHtml(node.id)}</strong><br/>interview: ${escapeHtml(node.interview_id || "unknown")}</div>
+          <div class="mini"><strong>Quote (EN)</strong><br/>${escapeHtml(node.display_quote_en || node.label || "Translation pending")}</div>
+          <div class="mini"><strong>F-M-O</strong><br/>${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}</div>
+          <div class="mini"><strong>Why linked</strong><br/>${why || "No link explanation yet."}</div>
+        `;
+      }
+
+      function renderProgress(map) {
+        const progress = map.progress_snapshot || {};
+        const unvalidated = map.unvalidated_hypotheses || [];
+        const clusters = map.clusters || [];
+        els.progress.innerHTML = `
+          <div class="mini"><strong>Progress</strong><br/>
+            new hypotheses (latest interview): ${progress.new_hypotheses_latest_interview || 0}<br/>
+            total hypotheses: ${progress.total_hypotheses || 0}<br/>
+            validated: ${progress.validated_hypotheses || 0}<br/>
+            unvalidated: ${progress.unvalidated_hypotheses || 0}
+          </div>
+          <div class="mini"><strong>Unvalidated hypotheses backlog</strong><br/>${unvalidated.length}</div>
+          ${(unvalidated || []).slice(0, 8).map((item) => `<div class="mini"><strong>${escapeHtml(item.id)}</strong> ${escapeHtml(item.label || "")}<br/>status: ${escapeHtml(item.status || "")}, confidence: ${Math.round((Number(item.confidence) || 0) * 100)}%<br/>born INT_${String(item.first_seen_interview || 0).padStart(3, "0")}, updated INT_${String(item.last_updated_interview || 0).padStart(3, "0")}</div>`).join("") || '<div class="mini">All hypotheses have confirmed links.</div>'}
+          <div class="mini"><strong>Candidate clusters</strong><br/>${clusters.length}</div>
+        `;
+      }
+
+      function renderHypothesis(map) {
+        const nodes = (map.nodes || []).map((item) => {
+          const prev = state.graph.nodePositions.get(item.id);
+          return {
+            ...item,
+            x: prev ? prev.x : (els.graph.clientWidth || 900) / 2 + (Math.random() - 0.5) * 140,
+            y: prev ? prev.y : (els.graph.clientHeight || 700) / 2 + (Math.random() - 0.5) * 140,
+          };
+        });
+        const edges = (map.edges || []).map((item, idx) => ({ ...item, id: `${item.source}-${item.target}-${idx}` }));
+
+        if (!nodes.length) {
+          renderEmpty("No hypotheses/evidence available yet.");
+          return;
+        }
+
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 700;
+        state.graph.svg.attr("viewBox", `0 0 ${width} ${height}`);
+        clearGraph();
+
+        if (!state.graph.selectedNodeId || !nodes.some((node) => node.id === state.graph.selectedNodeId)) {
+          state.graph.selectedNodeId = nodes[0].id;
+        }
+
+        const simulation = d3
+          .forceSimulation(nodes)
+          .force("link", d3.forceLink(edges).id((d) => d.id).distance((d) => (d.source_type === "heuristic" ? 130 : 95)).strength(0.33))
+          .force("charge", d3.forceManyBody().strength(-230))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .force("x", d3.forceX((d) => (d.type === "hypothesis" ? width * 0.24 : d.type === "candidate_cluster" ? width * 0.5 : width * 0.74)).strength(0.30))
+          .force("y", d3.forceY(height / 2).strength(0.06))
+          .force("collide", d3.forceCollide().radius((d) => (d.type === "hypothesis" ? 34 : d.type === "candidate_cluster" ? 28 : 20)));
+
+        state.graph.simulation = simulation;
+
+        const links = state.graph.gLinks
+          .selectAll("line")
+          .data(edges, (d) => d.id)
+          .join("line")
+          .attr("stroke", (d) => {
+            if (d.relation === "supports" && d.source_type === "heuristic") return "#338df5";
+            if (d.relation === "supports") return "#14c985";
+            if (d.relation === "contradicts") return "#d43f35";
+            if (d.relation === "potential_supporter") return "#7a7a7a";
+            return "#338df5";
+          })
+          .attr("stroke-width", 1.8)
+          .attr("stroke-opacity", (d) => (d.relation === "potential_supporter" ? 0.45 : 0.85))
+          .attr("stroke-dasharray", (d) => (d.source_type === "heuristic" ? "5,5" : ""));
+
+        const groups = state.graph.gNodes
+          .selectAll("g")
+          .data(nodes, (d) => d.id)
+          .join((enter) => {
+            const g = enter.append("g").style("cursor", "pointer");
+            g.append("rect").attr("rx", 10).attr("ry", 10);
+            g.append("circle");
+            g.append("text").attr("text-anchor", "middle").attr("font-size", 10).attr("font-weight", 700).attr("pointer-events", "none");
+            return g;
+          });
+
+        groups.each(function (d) {
+          const g = d3.select(this);
+          const rect = g.select("rect");
+          const circle = g.select("circle");
+          const text = g.select("text");
+
+          if (d.type === "hypothesis") {
+            rect
+              .attr("display", null)
+              .attr("x", -48)
+              .attr("y", -18)
+              .attr("width", 96)
+              .attr("height", 36)
+              .attr("fill", "#e8f3ff")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#0d4a95" : "#338df5")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.4);
+            circle.attr("display", "none");
+            text.attr("fill", "#0d4a95").text(d.id);
+          } else if (d.type === "candidate_cluster") {
+            rect.attr("display", "none");
+            circle
+              .attr("display", null)
+              .attr("r", 16)
+              .attr("fill", "#fff2e8")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#5d4037" : "#b78363")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.4)
+              .attr("stroke-dasharray", "4,3");
+            text.attr("fill", "#5d4037").text(d.id.replace("CLUSTER_", "C"));
+          } else {
+            rect.attr("display", "none");
+            circle
+              .attr("display", null)
+              .attr("r", 13)
+              .attr("fill", "#fff")
+              .attr("stroke", d.id === state.graph.selectedNodeId ? "#23262c" : "#6b7280")
+              .attr("stroke-width", d.id === state.graph.selectedNodeId ? 2.2 : 1.2);
+            text.attr("fill", "#23262c").text(d.id);
+          }
+        });
+
+        groups.selectAll("title").remove();
+        groups.append("title").text((d) => `${d.id}\n${d.label || ""}`);
+
+        groups.on("click", (_, node) => {
+          state.graph.selectedNodeId = node.id;
+          renderHypothesis(map);
+        });
+
+        simulation.on("tick", () => {
+          const xy = (value) => {
+            if (value && typeof value === "object" && "x" in value) return value;
+            return nodes.find((item) => item.id === value) || { x: 0, y: 0 };
+          };
+          links
+            .attr("x1", (d) => xy(d.source?.id || d.source).x)
+            .attr("y1", (d) => xy(d.source?.id || d.source).y)
+            .attr("x2", (d) => xy(d.target?.id || d.target).x)
+            .attr("y2", (d) => xy(d.target?.id || d.target).y);
+
+          groups.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+          for (const node of nodes) {
+            state.graph.nodePositions.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+
+        const stats = map.stats || {};
+        els.summary.textContent = `Hypotheses: ${stats.hypotheses || 0}. Evidence: ${stats.evidence || 0}. LLM supports: ${stats.supports_edges || 0}. Heuristic supports: ${stats.heuristic_supports_edges || 0}. Contradicts: ${stats.contradicts_edges || 0}. Validated: ${stats.validated_hypotheses || 0}. Unvalidated: ${stats.unvalidated_hypotheses || 0}.`;
+
+        const legend = map.status_legend || {};
+        els.legend.innerHTML = `
+          <span class="dot" style="color:#14c985;">supports (LLM)</span>
+          <span class="dot" style="color:#338df5;">supports (heuristic)</span>
+          <span class="dot" style="color:#d43f35;">contradicts</span>
+          <span class="dot" style="color:#338df5;">hypothesis</span>
+          <span class="dot" style="color:#5d4037;">candidate</span>
+          <span class="mini">untested ${legend.untested || 0}</span>
+          <span class="mini">exploring ${legend.exploring || 0}</span>
+          <span class="mini">confirmed ${legend.confirmed || 0}</span>
+        `;
+
+        renderSelected(map, state.graph.selectedNodeId);
+        renderProgress(map);
+      }
+
+      function tokenize(value) {
+        const text = String(value || "").toLowerCase();
+        let matches = [];
+        try {
+          matches = text.match(/[\p{L}\p{N}]{2,}/gu) || [];
+        } catch {
+          matches = text.split(/[^a-z0-9а-яё]+/).filter((x) => x.length > 1);
+        }
+        return new Set(matches);
+      }
+
+      function jaccard(setA, setB) {
+        if (!setA.size && !setB.size) return 0;
+        let intersection = 0;
+        for (const item of setA) {
+          if (setB.has(item)) intersection += 1;
+        }
+        return intersection / ((setA.size + setB.size - intersection) || 1);
+      }
+
+      function renderNetwork(project) {
+        const evidence = (project.evidence_store || []).map((item) => ({ ...item }));
+        if (!evidence.length) {
+          renderEmpty("No evidence yet.");
+          els.selected.innerHTML = '<div class="mini">No node selected.</div>';
+          els.progress.innerHTML = '<div class="mini">No hypotheses yet.</div>';
+          els.summary.textContent = "No evidence yet.";
+          return;
+        }
+
+        const propositionMap = new Map((project.proposition_store || []).map((item) => [item.id, item]));
+        const evidenceToProps = new Map(evidence.map((item) => [item.id, new Set()]));
+        for (const proposition of project.proposition_store || []) {
+          for (const id of [...(proposition.supporting_evidence || []), ...(proposition.contradicting_evidence || [])]) {
+            if (evidenceToProps.has(id)) evidenceToProps.get(id).add(proposition.id);
+          }
+        }
+
+        const width = els.graph.clientWidth || 900;
+        const height = els.graph.clientHeight || 700;
+        state.graph.svg.attr("viewBox", `0 0 ${width} ${height}`);
+        clearGraph();
+
+        const nodes = evidence.map((item) => {
+          const prev = state.graph.nodePositions.get(item.id);
+          const interviewIndex = Number(String(item.interview_id || "").replace(/\D/g, "")) || 1;
+          return {
+            id: item.id,
+            interviewId: item.interview_id,
+            quote: item.quote_english || item.quote || "Translation pending",
+            factor: item.factor,
+            mechanism: item.mechanism,
+            outcome: item.outcome,
+            tags: new Set((item.tags || []).map((x) => String(x).toLowerCase())),
+            fmoTokens: tokenize(`${item.factor} ${item.mechanism} ${item.outcome}`),
+            propositionIds: evidenceToProps.get(item.id) || new Set(),
+            interviewColor: d3.interpolateTurbo((interviewIndex % 10) / 10),
+            degree: 0,
+            x: prev ? prev.x : width / 2 + (Math.random() - 0.5) * 80,
+            y: prev ? prev.y : height / 2 + (Math.random() - 0.5) * 80,
+          };
+        });
+
+        const edges = [];
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+            const propositionOverlap = jaccard(a.propositionIds, b.propositionIds);
+            const tagOverlap = jaccard(a.tags, b.tags);
+            const fmoOverlap = jaccard(a.fmoTokens, b.fmoTokens);
+            const score = 0.45 * propositionOverlap + 0.35 * tagOverlap + 0.2 * fmoOverlap;
+            if (score >= 0.7) {
+              edges.push({ source: a.id, target: b.id, score });
+              a.degree += 1;
+              b.degree += 1;
+            }
+          }
+        }
+
+        if (!state.graph.selectedNodeId || !nodes.some((node) => node.id === state.graph.selectedNodeId)) {
+          state.graph.selectedNodeId = nodes[0].id;
+        }
+
+        const simulation = d3
+          .forceSimulation(nodes)
+          .force("link", d3.forceLink(edges).id((d) => d.id).distance(95).strength(0.35))
+          .force("charge", d3.forceManyBody().strength(-180))
+          .force("center", d3.forceCenter(width / 2, height / 2));
+
+        const links = state.graph.gLinks
+          .selectAll("line")
+          .data(edges)
+          .join("line")
+          .attr("stroke", "#95a0ad")
+          .attr("stroke-opacity", 0.34)
+          .attr("stroke-width", (d) => 1 + d.score * 2.1)
+          .attr("stroke-dasharray", "5,5");
+
+        const groups = state.graph.gNodes
+          .selectAll("g")
+          .data(nodes, (d) => d.id)
+          .join((enter) => {
+            const g = enter.append("g").style("cursor", "pointer");
+            g.append("circle");
+            g.append("text").attr("text-anchor", "middle").attr("dy", 4).attr("font-size", 10).attr("font-weight", 700).attr("pointer-events", "none");
+            return g;
+          });
+
+        groups.select("circle")
+          .attr("fill", (d) => d.interviewColor)
+          .attr("r", 10)
+          .attr("stroke", (d) => (d.id === state.graph.selectedNodeId ? "#23262c" : "#fff"))
+          .attr("stroke-width", (d) => (d.id === state.graph.selectedNodeId ? 2.2 : 1.3));
+
+        groups.select("text").text((d) => d.id).attr("fill", "#23262c");
+        groups.selectAll("title").remove();
+        groups.append("title").text((d) => `${d.id}\n${d.quote}`);
+
+        groups.on("click", (_, node) => {
+          state.graph.selectedNodeId = node.id;
+          renderNetwork(project);
+        });
+
+        simulation.on("tick", () => {
+          links
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+          groups.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+          for (const node of nodes) {
+            state.graph.nodePositions.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+
+        const selected = nodes.find((item) => item.id === state.graph.selectedNodeId) || nodes[0];
+        const propsText = Array.from(selected.propositionIds || []).map((id) => propositionMap.get(id)).filter(Boolean).map((item) => `${item.id} (${item.status})`).join("<br/>");
+        els.selected.innerHTML = `
+          <div class="mini"><strong>${escapeHtml(selected.id)}</strong><br/>interview: ${escapeHtml(selected.interviewId || "unknown")}<br/>degree: ${selected.degree}</div>
+          <div class="mini"><strong>Quote (EN)</strong><br/>${escapeHtml(selected.quote || "")}</div>
+          <div class="mini"><strong>F-M-O</strong><br/>${escapeHtml(selected.factor || "")} -> ${escapeHtml(selected.mechanism || "")} -> ${escapeHtml(selected.outcome || "")}</div>
+          <div class="mini"><strong>Linked hypotheses</strong><br/>${propsText || "none"}</div>
+        `;
+        els.progress.innerHTML = '<div class="mini">Evidence Network mode shows similarity links (>= 0.70).</div>';
+        els.summary.textContent = `Evidence nodes: ${nodes.length}. Similarity edges: ${edges.length}. Threshold: 0.70.`;
+        els.legend.innerHTML = `
+          <span class="dot" style="color:#95a0ad;">similarity edge</span>
+          <span class="dot" style="color:#338df5;">evidence node</span>
+        `;
+      }
+
+      function render() {
+        if (!state.project) return;
+        if (state.mode === "hypothesis") {
+          renderHypothesis(state.map || { nodes: [], edges: [] });
+        } else {
+          renderNetwork(state.project);
+        }
+      }
+
+      async function load() {
+        if (!projectId) {
+          setStatus("Missing project_id in query", true);
+          return;
+        }
+        try {
+          const [project, map] = await Promise.all([
+            api(`/api/projects/${encodeURIComponent(projectId)}`),
+            api(`/api/projects/${encodeURIComponent(projectId)}/visualization/hypothesis-map`),
+          ]);
+          state.project = project;
+          state.map = map;
+          els.title.textContent = `Graph View: ${project.id}`;
+          els.subtitle.textContent = project.research_question || "";
+          render();
+          setStatus(`Loaded at ${new Date().toLocaleTimeString()}`);
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+
+      function connectSSE() {
+        if (!projectId) return;
+        if (state.sse) state.sse.close();
+        const sse = new EventSource(`/api/projects/${encodeURIComponent(projectId)}/stream`);
+        state.sse = sse;
+        [
+          "new_evidence",
+          "proposition_updated",
+          "new_proposition",
+          "script_updated",
+          "project_status",
+          "project_stats",
+          "report_ready",
+          "report_stale",
+          "prompt_sanitized",
+          "topic_redirect_applied",
+          "visualization_model_ready",
+          "translations_backfilled",
+          "heuristic_links_updated",
+        ].forEach((eventName) => sse.addEventListener(eventName, () => load()));
+      }
+
+      function switchMode(mode) {
+        state.mode = mode;
+        els.hypothesisBtn.classList.toggle("active", mode === "hypothesis");
+        els.networkBtn.classList.toggle("active", mode === "network");
+        render();
+      }
+
+      els.reloadBtn.onclick = load;
+      els.hypothesisBtn.onclick = () => switchMode("hypothesis");
+      els.networkBtn.onclick = () => switchMode("network");
+
+      ensureGraph();
+      switchMode(state.mode);
+      load();
+      connectSSE();
+    </script>
+  </body>
+</html>

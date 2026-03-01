@@ -21,4 +21,6 @@ class Evidence(BaseModel):
     outcome: str
     tags: list[str] = Field(default_factory=list)
     language: str = "en"
+    quote_english: str | None = None
+    translation_status: str = "pending"
     timestamp: datetime = Field(default_factory=utc_now)

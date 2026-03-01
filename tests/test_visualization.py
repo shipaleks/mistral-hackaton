@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+import pytest
+
 from api.routes_projects import get_hypothesis_map
+from agents.synthesizer import SynthesizerAgent
 from models.evidence import Evidence
 from models.proposition import Proposition
 from services.project_service import ProjectService
 from services.visualization import build_hypothesis_map
+from services.sse_manager import SSEManager
+
+
+class DummyLLM:
+    async def chat(self, *args, **kwargs):
+        return ""
+
+    async def chat_json(self, *args, **kwargs):
+        return {}
 
 
 def test_build_hypothesis_map_supports_and_contradicts(tmp_path) -> None:
@@ -57,17 +69,27 @@ def test_build_hypothesis_map_supports_and_contradicts(tmp_path) -> None:
     assert model["stats"]["contradicts_edges"] == 1
     assert any(edge["relation"] == "supports" for edge in model["edges"])
     assert any(edge["relation"] == "contradicts" for edge in model["edges"])
+    assert "status_legend" in model
+    assert "unvalidated_hypotheses" in model
+    assert all("source_type" in edge for edge in model["edges"])
+    assert all("explanation" in edge for edge in model["edges"])
 
 
-def test_hypothesis_map_route_returns_payload(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_hypothesis_map_route_returns_payload(tmp_path) -> None:
     service = ProjectService(tmp_path)
     project = service.create_project("demo", "RQ")
     service.save_project(project)
 
-    payload = get_hypothesis_map("demo", project_service=service)
+    payload = await get_hypothesis_map(
+        "demo",
+        project_service=service,
+        synthesizer=SynthesizerAgent(DummyLLM()),
+        sse=SSEManager(),
+    )
 
     assert payload["project_id"] == "demo"
     assert "nodes" in payload
     assert "edges" in payload
     assert "stats" in payload
-
+    assert "progress_snapshot" in payload

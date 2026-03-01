@@ -201,6 +201,29 @@
         box-shadow: inset 0 0 0 1px var(--mistral-blue);
       }
 
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        border-top-color: #fff;
+        display: inline-block;
+        margin-right: 6px;
+        animation: spin 0.8s linear infinite;
+        vertical-align: -2px;
+      }
+
+      button:not(.primary) .spinner {
+        border-color: rgba(35, 38, 44, 0.2);
+        border-top-color: var(--mistral-ink);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -309,7 +332,7 @@
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 8px;
       }
 
@@ -494,7 +517,7 @@
           <div class="form" style="margin-top:8px;">
             <label>
               Research question
-              <textarea id="researchQuestion">What is your experience with this hackathon so far?</textarea>
+              <textarea id="researchQuestion">What factors shape your experience with this topic?</textarea>
             </label>
             <div class="row">
               <button class="primary" id="createProjectBtn">Create project</button>
@@ -518,6 +541,7 @@
             </div>
             <div class="row">
               <span class="pill" id="projectStatusPill">status: draft</span>
+              <button id="reloadBtn">Reload state</button>
               <button id="stopBtn">Stop project</button>
               <button class="danger" id="deleteBtn">Delete project</button>
             </div>
@@ -573,6 +597,7 @@
               </p>
             </div>
             <div class="row">
+              <button id="openFullscreenBtn">Open Fullscreen</button>
               <button id="modeHypothesisBtn" class="active">Hypothesis Map</button>
               <button id="modeNetworkBtn">Evidence Network</button>
             </div>
@@ -588,11 +613,11 @@
             <aside class="graph-side">
               <div class="graph-rule" id="graphSummary">No evidence yet.</div>
               <div>
-                <h4>Selected Node</h4>
+                <h4>Selected Item</h4>
                 <div class="mini-list" id="selectedEvidence"></div>
               </div>
               <div>
-                <h4>Map Details</h4>
+                <h4>Research Progress</h4>
                 <div class="mini-list" id="overlayList"></div>
               </div>
             </aside>
@@ -625,6 +650,7 @@
         cardsTimer: null,
         pollingTimer: null,
         refreshDebounce: null,
+        actionTimeout: null,
         graph: {
           svg: null,
           gLinks: null,
@@ -647,6 +673,7 @@
         projectTitle: document.getElementById("projectTitle"),
         projectQuestion: document.getElementById("projectQuestion"),
         projectStatusPill: document.getElementById("projectStatusPill"),
+        reloadBtn: document.getElementById("reloadBtn"),
         controlStatus: document.getElementById("controlStatus"),
         agentId: document.getElementById("agentId"),
         startBtn: document.getElementById("startBtn"),
@@ -664,6 +691,7 @@
         graphSummary: document.getElementById("graphSummary"),
         graphDescription: document.getElementById("graphDescription"),
         graphLegend: document.getElementById("graphLegend"),
+        openFullscreenBtn: document.getElementById("openFullscreenBtn"),
         modeHypothesisBtn: document.getElementById("modeHypothesisBtn"),
         modeNetworkBtn: document.getElementById("modeNetworkBtn"),
         selectedEvidence: document.getElementById("selectedEvidence"),
@@ -684,6 +712,47 @@
       function setStatus(el, text, isError = false) {
         el.textContent = text;
         el.classList.toggle("error", Boolean(isError));
+      }
+
+      function nowTimeLabel() {
+        return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      function setButtonBusy(button, isBusy) {
+        if (!button) return;
+        if (!button.dataset.defaultText) {
+          button.dataset.defaultText = button.textContent || "";
+        }
+        if (isBusy) {
+          button.dataset.prevDisabled = button.disabled ? "1" : "0";
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner"></span>Working...';
+          return;
+        }
+        button.innerHTML = escapeHtml(button.dataset.defaultText);
+        button.disabled = button.dataset.prevDisabled === "1";
+        delete button.dataset.prevDisabled;
+      }
+
+      async function runAction({ button, statusEl, actionName, fn }) {
+        setButtonBusy(button, true);
+        setStatus(statusEl, `${actionName} started at ${nowTimeLabel()}`);
+        if (state.actionTimeout) clearTimeout(state.actionTimeout);
+        state.actionTimeout = setTimeout(() => {
+          setStatus(statusEl, `${actionName}: still processing...`);
+        }, 8000);
+        try {
+          const result = await fn();
+          setStatus(statusEl, `${actionName} completed at ${nowTimeLabel()}`);
+          return result;
+        } catch (error) {
+          setStatus(statusEl, error.message || String(error), true);
+          return null;
+        } finally {
+          if (state.actionTimeout) clearTimeout(state.actionTimeout);
+          setButtonBusy(button, false);
+          if (state.selectedProject) renderProject(state.selectedProject);
+        }
       }
 
       function toPct(value) {
@@ -800,6 +869,8 @@
         els.projectQuestion.textContent = project.research_question || "";
         els.projectStatusPill.textContent = `status: ${project.status}`;
         els.projectStatusPill.className = `pill ${statusClass(project.status)}`.trim();
+        els.reloadBtn.disabled = false;
+        els.openFullscreenBtn.disabled = false;
         els.stopBtn.disabled = !["running", "reporting"].includes(project.status);
         els.deleteBtn.disabled = false;
 
@@ -849,10 +920,13 @@
 
       function renderMetrics(project) {
         const activePropositions = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
+        const progress = state.hypothesisMap?.progress_snapshot || {};
         const metrics = [
           ["Participants", String((project.interview_store || []).length)],
           ["Evidence", String((project.evidence_store || []).length)],
           ["Active hypotheses", String(activePropositions)],
+          ["New hypotheses (latest)", String(progress.new_hypotheses_latest_interview || 0)],
+          ["Total hypotheses", String(progress.total_hypotheses || (project.proposition_store || []).length)],
           ["Convergence", toPct(project.metrics?.convergence_score)],
           ["Novelty", toPct(project.metrics?.novelty_rate)],
         ];
@@ -905,14 +979,21 @@
         state.graph.gEmpty.selectAll("*").remove();
       }
 
-      function setGraphLegend(mode) {
+      function setGraphLegend(mode, map = null) {
         if (mode === "hypothesis") {
           els.graphDescription.textContent = "Hypothesis Map: hypothesis blocks connect to evidence as supports (green) or contradicts (red). Unassigned evidence forms candidate clusters.";
+          const legend = map?.status_legend || {};
           els.graphLegend.innerHTML = `
-            <span class="legend-dot" style="color:#14c985;">supports</span>
+            <span class="legend-dot" style="color:#14c985;">supports (LLM)</span>
+            <span class="legend-dot" style="color:#338df5;">supports (heuristic)</span>
             <span class="legend-dot" style="color:#d43f35;">contradicts</span>
             <span class="legend-dot" style="color:#338df5;">hypothesis node</span>
             <span class="legend-dot" style="color:#5d4037;">candidate cluster</span>
+            <span class="pill">untested ${legend.untested || 0}</span>
+            <span class="pill">exploring ${legend.exploring || 0}</span>
+            <span class="pill">confirmed ${legend.confirmed || 0}</span>
+            <span class="pill">challenged ${legend.challenged || 0}</span>
+            <span class="pill">saturated ${legend.saturated || 0}</span>
           `;
           return;
         }
@@ -944,7 +1025,7 @@
             id: evidenceItem.id,
             type: "evidence",
             interviewId: evidenceItem.interview_id,
-            quote: evidenceItem.quote,
+            quote: evidenceItem.quote_english || evidenceItem.quote || "Translation pending",
             factor: evidenceItem.factor,
             mechanism: evidenceItem.mechanism,
             outcome: evidenceItem.outcome,
@@ -1054,6 +1135,7 @@
           .data(edges, (d) => d.id)
           .join("line")
           .attr("stroke", (d) => {
+            if (d.relation === "supports" && d.source_type === "heuristic") return "#338df5";
             if (d.relation === "supports") return "#14c985";
             if (d.relation === "contradicts") return "#d43f35";
             if (d.relation === "potential_supporter") return "#7a7a7a";
@@ -1061,7 +1143,11 @@
           })
           .attr("stroke-width", (d) => (d.relation === "potential_supporter" ? 1.2 : 1.8))
           .attr("stroke-opacity", (d) => (d.relation === "potential_supporter" ? 0.45 : 0.85))
-          .attr("stroke-dasharray", (d) => (d.relation === "potential_supporter" ? "5,5" : d.relation === "candidate_member" ? "3,4" : ""));
+          .attr("stroke-dasharray", (d) => {
+            if (d.source_type === "heuristic" || d.relation === "potential_supporter") return "5,5";
+            if (d.relation === "candidate_member") return "3,4";
+            return "";
+          });
 
         const nodeGroup = state.graph.gNodes
           .selectAll("g.node")
@@ -1137,7 +1223,7 @@
         });
 
         const stats = map.stats || {};
-        els.graphSummary.textContent = `Hypotheses: ${stats.hypotheses || 0}. Evidence: ${stats.evidence || 0}. Supports: ${stats.supports_edges || 0}. Contradicts: ${stats.contradicts_edges || 0}. Unassigned: ${stats.unassigned_evidence || 0}.`;
+        els.graphSummary.textContent = `Hypotheses: ${stats.hypotheses || 0}. Evidence: ${stats.evidence || 0}. LLM supports: ${stats.supports_edges || 0}. Heuristic supports: ${stats.heuristic_supports_edges || 0}. Contradicts: ${stats.contradicts_edges || 0}. Validated: ${stats.validated_hypotheses || 0}. Unvalidated: ${stats.unvalidated_hypotheses || 0}.`;
 
         renderSelectedHypothesisNode(map, state.graph.selectedNodeId);
         renderHypothesisDetails(map);
@@ -1152,10 +1238,23 @@
 
         if (node.type === "hypothesis") {
           const linked = (map.edges || []).filter((edge) => edge.source === node.id || edge.target === node.id);
+          const supportEdges = linked.filter((edge) => edge.relation === "supports" && edge.source === node.id);
+          const topEvidence = supportEdges
+            .slice(0, 3)
+            .map((edge) => {
+              const evidence = (map.nodes || []).find((item) => item.id === edge.target);
+              if (!evidence) return null;
+              return `<div class="mini-card"><strong>${escapeHtml(evidence.id)}</strong><br/>${escapeHtml(evidence.display_quote_en || evidence.label || "")}<br/><span class="muted">${escapeHtml(edge.explanation || "")}</span></div>`;
+            })
+            .filter(Boolean)
+            .join("");
+
           els.selectedEvidence.innerHTML = `
             <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>${escapeHtml(node.label || "")}</div>
+            <div class="mini-card"><strong>F-M-O</strong><br/>${escapeHtml(node.fmo?.factor || "")} -> ${escapeHtml(node.fmo?.mechanism || "")} -> ${escapeHtml(node.fmo?.outcome || "")}</div>
             <div class="mini-card">status: ${escapeHtml(node.status || "")}, confidence: ${toPct(node.confidence || 0)}</div>
-            <div class="mini-card">supports: ${node.support_count || 0}, contradicts: ${node.contradict_count || 0}, links: ${linked.length}</div>
+            <div class="mini-card">confirmed supports: ${node.support_count || 0}, contradicts: ${node.contradict_count || 0}, heuristic supports: ${node.heuristic_support_count || 0}</div>
+            ${topEvidence || '<div class="mini-card">No linked evidence yet for this hypothesis.</div>'}
           `;
           return;
         }
@@ -1170,35 +1269,63 @@
         }
 
         const mapped = Array.isArray(node.mapped_hypotheses) ? node.mapped_hypotheses.join(", ") : "none";
+        const evidenceEdges = (map.edges || []).filter((edge) => edge.target === node.id);
+        const explainLines = evidenceEdges
+          .slice(0, 4)
+          .map((edge) => `${edge.source} (${edge.source_type}): ${edge.explanation || edge.relation}`)
+          .join("<br/>");
         els.selectedEvidence.innerHTML = `
           <div class="mini-card"><strong>${escapeHtml(node.id)}</strong><br/>interview: ${escapeHtml(node.interview_id || "unknown")}</div>
-          <div class="mini-card"><strong>Quote</strong><br/>${escapeHtml(node.label || "")}</div>
+          <div class="mini-card"><strong>Quote (EN)</strong><br/>${escapeHtml(node.display_quote_en || node.label || "Translation pending")}</div>
           <div class="mini-card"><strong>F-M-O</strong><br/>${escapeHtml(node.factor || "")} -> ${escapeHtml(node.mechanism || "")} -> ${escapeHtml(node.outcome || "")}</div>
           <div class="mini-card">mapped hypotheses: ${escapeHtml(mapped || "none")}</div>
+          <div class="mini-card"><strong>Why linked</strong><br/>${explainLines || "No link explanation yet."}</div>
         `;
       }
 
       function renderHypothesisDetails(map) {
         const clusters = map.clusters || [];
         const pool = map.unassigned_pool || [];
+        const progress = map.progress_snapshot || {};
+        const unvalidated = map.unvalidated_hypotheses || [];
 
-        let html = "";
-        if (clusters.length) {
-          html += clusters
-            .slice(0, 6)
-            .map((cluster) => {
-              const supporters = (cluster.potential_supporters || []).map((item) => `${item.evidence_id} (${item.score})`).join(", ");
-              return `<div class="mini-card"><strong>${escapeHtml(cluster.id)}</strong>: ${escapeHtml(cluster.label || "")}<br/>members: ${(cluster.evidence_ids || []).length}<br/>potential supporters: ${escapeHtml(supporters || "none")}</div>`;
-            })
-            .join("");
-        }
+        const progressCard = `
+          <div class="mini-card"><strong>Progress</strong><br/>
+            new hypotheses (latest interview): ${progress.new_hypotheses_latest_interview || 0}<br/>
+            total hypotheses: ${progress.total_hypotheses || 0}<br/>
+            validated: ${progress.validated_hypotheses || 0}<br/>
+            unvalidated: ${progress.unvalidated_hypotheses || 0}
+          </div>
+        `;
 
-        if (!html) {
-          html = '<div class="mini-card">No candidate clusters yet.</div>';
-        }
+        const backlog = unvalidated.length
+          ? unvalidated
+              .slice(0, 8)
+              .map(
+                (item) =>
+                  `<div class="mini-card"><strong>${escapeHtml(item.id)}</strong> ${escapeHtml(item.label || "")}<br/>status: ${escapeHtml(item.status || "")}, confidence: ${toPct(item.confidence || 0)}<br/>born INT_${String(item.first_seen_interview || 0).padStart(3, "0")}, updated INT_${String(item.last_updated_interview || 0).padStart(3, "0")}</div>`
+              )
+              .join("")
+          : '<div class="mini-card">All hypotheses have at least one confirmed link.</div>';
 
-        html += `<div class="mini-card"><strong>Unassigned evidence pool</strong><br/>count: ${pool.length}</div>`;
-        els.overlayList.innerHTML = html;
+        const clusterHtml = clusters.length
+          ? clusters
+              .slice(0, 5)
+              .map((cluster) => {
+                const supporters = (cluster.potential_supporters || []).map((item) => `${item.evidence_id} (${item.score})`).join(", ");
+                return `<div class="mini-card"><strong>${escapeHtml(cluster.id)}</strong>: ${escapeHtml(cluster.label || "")}<br/>members: ${(cluster.evidence_ids || []).length}<br/>potential supporters: ${escapeHtml(supporters || "none")}</div>`;
+              })
+              .join("")
+          : '<div class="mini-card">No candidate clusters yet.</div>';
+
+        els.overlayList.innerHTML = `
+          ${progressCard}
+          <div class="mini-card"><strong>Unvalidated hypotheses backlog</strong><br/>${unvalidated.length}</div>
+          ${backlog}
+          <div class="mini-card"><strong>Candidate clusters</strong><br/>${clusters.length}</div>
+          ${clusterHtml}
+          <div class="mini-card"><strong>Unassigned evidence pool</strong><br/>${pool.length}</div>
+        `;
       }
 
       function renderEvidenceNetwork(project) {
@@ -1359,7 +1486,7 @@
 
       function renderGraph(project) {
         ensureGraphInitialized();
-        setGraphLegend(state.visualMode);
+        setGraphLegend(state.visualMode, state.hypothesisMap);
         if (state.visualMode === "hypothesis") {
           renderHypothesisMap(project);
           return;
@@ -1395,7 +1522,9 @@
 
         const generatedAt = project.report_generated_at || "unknown";
         const staleText = project.report_stale ? " - stale" : "";
-        setStatus(els.reportStatus, `Report generated: ${generatedAt}${staleText}`);
+        const mode = project.report_generation_mode || "unknown";
+        const reason = project.report_fallback_reason ? ` | fallback reason: ${project.report_fallback_reason}` : "";
+        setStatus(els.reportStatus, `Report generated: ${generatedAt}${staleText} | mode: ${mode}${reason}`);
 
         if (els.rawToggle.checked) {
           els.reportView.innerHTML = `<pre class="mono">${escapeHtml(project.report_markdown)}</pre>`;
@@ -1455,6 +1584,8 @@
           "prompt_sanitized",
           "topic_redirect_applied",
           "visualization_model_ready",
+          "translations_backfilled",
+          "heuristic_links_updated",
         ].forEach((eventName) => source.addEventListener(eventName, () => scheduleProjectRefresh()));
       }
 
@@ -1481,17 +1612,20 @@
           return;
         }
 
-        try {
-          const result = await api("/api/projects", {
-            method: "POST",
-            body: JSON.stringify({ research_question: researchQuestion }),
-          });
-          setStatus(els.createStatus, `Created ${result.project_id}`);
-          await refreshCards({ silent: true });
-          await selectProject(result.project_id, { silent: true });
-        } catch (error) {
-          setStatus(els.createStatus, error.message, true);
-        }
+        await runAction({
+          button: els.createProjectBtn,
+          statusEl: els.createStatus,
+          actionName: "Create project",
+          fn: async () => {
+            const result = await api("/api/projects", {
+              method: "POST",
+              body: JSON.stringify({ research_question: researchQuestion }),
+            });
+            setStatus(els.createStatus, `Created ${result.project_id}`);
+            await refreshCards({ silent: true });
+            await selectProject(result.project_id, { silent: true });
+          },
+        });
       }
 
       async function startResearch() {
@@ -1500,23 +1634,26 @@
           return;
         }
 
-        try {
-          const agentId = els.agentId.value.trim();
-          const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
-          const result = await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-          setStatus(
-            els.controlStatus,
-            `Project started. prompt safety: ${result.prompt_safety_status || "ok"} (${result.prompt_safety_violations_count || 0}).`
-          );
-          await loadProject(state.selectedProjectId, { silent: true });
-          await refreshCards({ silent: true });
-          connectSSE(state.selectedProjectId);
-        } catch (error) {
-          setStatus(els.controlStatus, error.message, true);
-        }
+        await runAction({
+          button: els.startBtn,
+          statusEl: els.controlStatus,
+          actionName: "Start research",
+          fn: async () => {
+            const agentId = els.agentId.value.trim();
+            const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
+            const result = await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/start`, {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+            setStatus(
+              els.controlStatus,
+              `Project started. prompt safety: ${result.prompt_safety_status || "ok"} (${result.prompt_safety_violations_count || 0}).`
+            );
+            await loadProject(state.selectedProjectId, { silent: true });
+            await refreshCards({ silent: true });
+            connectSSE(state.selectedProjectId);
+          },
+        });
       }
 
       async function finishResearch() {
@@ -1531,14 +1668,17 @@
           return;
         }
 
-        try {
-          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, { method: "POST" });
-          setStatus(els.controlStatus, "Generating report in background...");
-          await loadProject(state.selectedProjectId, { silent: true });
-          await refreshCards({ silent: true });
-        } catch (error) {
-          setStatus(els.controlStatus, error.message, true);
-        }
+        await runAction({
+          button: els.finishBtn,
+          statusEl: els.controlStatus,
+          actionName: "Finish and generate report",
+          fn: async () => {
+            await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, { method: "POST" });
+            setStatus(els.controlStatus, "Generating report in background...");
+            await loadProject(state.selectedProjectId, { silent: true });
+            await refreshCards({ silent: true });
+          },
+        });
       }
 
       async function stopProject() {
@@ -1546,16 +1686,19 @@
           setStatus(els.controlStatus, "Select or create a project first.", true);
           return;
         }
-        try {
-          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/stop`, {
-            method: "POST",
-          });
-          setStatus(els.controlStatus, "Project stopped. Agent is now free for another project.");
-          await loadProject(state.selectedProjectId, { silent: true });
-          await refreshCards({ silent: true });
-        } catch (error) {
-          setStatus(els.controlStatus, error.message, true);
-        }
+        await runAction({
+          button: els.stopBtn,
+          statusEl: els.controlStatus,
+          actionName: "Stop project",
+          fn: async () => {
+            await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/stop`, {
+              method: "POST",
+            });
+            setStatus(els.controlStatus, "Project stopped. Agent is now free for another project.");
+            await loadProject(state.selectedProjectId, { silent: true });
+            await refreshCards({ silent: true });
+          },
+        });
       }
 
       async function deleteProject() {
@@ -1566,14 +1709,42 @@
         const ok = window.confirm(`Delete project '${state.selectedProjectId}'? This cannot be undone.`);
         if (!ok) return;
 
-        try {
-          await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}`, {
-            method: "DELETE",
-          });
-          window.location.reload();
-        } catch (error) {
-          setStatus(els.controlStatus, error.message, true);
+        await runAction({
+          button: els.deleteBtn,
+          statusEl: els.controlStatus,
+          actionName: "Delete project",
+          fn: async () => {
+            await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}`, {
+              method: "DELETE",
+            });
+            window.location.reload();
+          },
+        });
+      }
+
+      async function reloadProjectState() {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select or create a project first.", true);
+          return;
         }
+        await runAction({
+          button: els.reloadBtn,
+          statusEl: els.controlStatus,
+          actionName: "Reload state",
+          fn: async () => {
+            await loadProject(state.selectedProjectId, { silent: true });
+            await refreshCards({ silent: true });
+          },
+        });
+      }
+
+      function openFullscreenGraph() {
+        if (!state.selectedProjectId) {
+          setStatus(els.controlStatus, "Select or create a project first.", true);
+          return;
+        }
+        const url = `/ui/graph?project_id=${encodeURIComponent(state.selectedProjectId)}&mode=${encodeURIComponent(state.visualMode)}`;
+        window.open(url, "_blank", "noopener,noreferrer");
       }
 
       function switchMode(mode) {
@@ -1588,8 +1759,10 @@
       els.createProjectBtn.onclick = createProject;
       els.startBtn.onclick = startResearch;
       els.finishBtn.onclick = finishResearch;
+      els.reloadBtn.onclick = reloadProjectState;
       els.stopBtn.onclick = stopProject;
       els.deleteBtn.onclick = deleteProject;
+      els.openFullscreenBtn.onclick = openFullscreenGraph;
       els.modeHypothesisBtn.onclick = () => switchMode("hypothesis");
       els.modeNetworkBtn.onclick = () => switchMode("network");
       els.rawToggle.onchange = () => {
@@ -1597,6 +1770,10 @@
       };
 
       async function boot() {
+        els.reloadBtn.disabled = true;
+        els.stopBtn.disabled = true;
+        els.deleteBtn.disabled = true;
+        els.openFullscreenBtn.disabled = true;
         await refreshCards({ silent: true });
 
         if (state.selectedProjectId) {

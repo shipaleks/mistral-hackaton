@@ -17,6 +17,7 @@ Expected output shape:
     {
       "id": "",
       "quote": "...",
+      "quote_english": "...",
       "interpretation": "...",
       "factor": "...",
       "mechanism": "...",

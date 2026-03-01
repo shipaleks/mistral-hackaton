@@ -19,7 +19,23 @@ _TOPIC_DRIFT_PATTERNS = [
     re.compile(r"\btech\s+stack\b", re.IGNORECASE),
     re.compile(r"\bcodebase\b", re.IGNORECASE),
     re.compile(r"\bimplementation\b", re.IGNORECASE),
+    re.compile(r"\bapi\s+integration\b", re.IGNORECASE),
+    re.compile(r"\binfrastructure\b", re.IGNORECASE),
 ]
+
+
+def _tokenize(text: str) -> set[str]:
+    return {token for token in re.findall(r"[\w]+", str(text or "").lower()) if len(token) > 2}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a and not b:
+        return 0.0
+    intersection = len(a.intersection(b))
+    union = len(a.union(b))
+    if union == 0:
+        return 0.0
+    return intersection / union
 
 
 @dataclass
@@ -106,7 +122,7 @@ class ScriptSafetyGuard:
             if self._has_personal_reference(main_question) or not main_question.strip():
                 main_question = self._fallback_question(proposition, research_question)
 
-            if self._is_topic_drift(main_question):
+            if self._is_topic_drift(main_question, research_question):
                 main_question = self._topic_redirect_question(main_question, research_question)
                 topic_redirect_applied = True
 
@@ -115,7 +131,7 @@ class ScriptSafetyGuard:
                 cleaned = self._sanitize_text(probe)
                 if not cleaned:
                     continue
-                if self._is_topic_drift(cleaned):
+                if self._is_topic_drift(cleaned, research_question):
                     cleaned = self._topic_redirect_probe(cleaned, research_question)
                     topic_redirect_applied = True
                 if cleaned not in probes:
@@ -153,7 +169,9 @@ class ScriptSafetyGuard:
 
         safe_wildcard = self._sanitize_text(script.wildcard)
         if self._has_personal_reference(safe_wildcard) or not safe_wildcard.strip():
-            safe_wildcard = "Is there anything else about your hackathon experience that we should capture?"
+            safe_wildcard = (
+                "Is there anything else about your experience with this research topic that we should capture?"
+            )
 
         safe_script = script.model_copy(deep=True)
         safe_script.opening_question = safe_opening
@@ -235,20 +253,22 @@ class ScriptSafetyGuard:
         value = str(text or "")
         return any(pattern.search(value) for pattern in _PERSONAL_PATTERNS)
 
-    def _is_topic_drift(self, text: str) -> bool:
+    def _is_topic_drift(self, text: str, research_question: str) -> bool:
         value = str(text or "")
-        if "hackathon" in value.lower():
+        rq_tokens = _tokenize(research_question or "")
+        text_tokens = _tokenize(value)
+        if rq_tokens and _jaccard(rq_tokens, text_tokens) >= 0.18:
             return False
         return any(pattern.search(value) for pattern in _TOPIC_DRIFT_PATTERNS)
 
     def _topic_redirect_question(self, text: str, research_question: str) -> str:
         return (
-            "Could you connect this back to your overall experience in the hackathon, "
-            "including how it affected your participation?"
+            f"Could you connect this back to the main research question: "
+            f"'{research_question}'?"
         )
 
     def _topic_redirect_probe(self, text: str, research_question: str) -> str:
-        return "How did this influence your hackathon experience overall?"
+        return "How did this influence your experience with the core research topic?"
 
     def _fallback_question(
         self,
@@ -258,7 +278,7 @@ class ScriptSafetyGuard:
         if proposition is None:
             return self._default_opening(research_question)
         return (
-            f"How did {proposition.factor.lower()} influence your hackathon experience, "
+            f"How did {proposition.factor.lower()} influence your experience with this topic, "
             f"and what outcomes did it create?"
         )
 
@@ -277,11 +297,13 @@ class ScriptSafetyGuard:
         )
 
     def _default_closing(self, research_question: str) -> str:
-        return "Before we end, what was the most important part of your hackathon experience for you?"
+        return (
+            "Before we end, what was the most important part of your experience related to this research question?"
+        )
 
     def _default_probes(self, research_question: str) -> list[str]:
         return [
-            "Can you give a concrete example from your hackathon experience?",
-            "What impact did this have on your participation?",
-            "Did this change over time during the hackathon?",
+            "Can you give a concrete example related to this topic?",
+            "What impact did this have on your experience?",
+            "Did this change over time?",
         ]

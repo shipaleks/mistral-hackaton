@@ -72,6 +72,8 @@ class ProjectReportResponse(BaseModel):
     report_markdown: str | None
     report_generated_at: str | None
     report_stale: bool
+    report_generation_mode: str
+    report_fallback_reason: str | None
 
 
 def _slugify(text: str) -> str:
@@ -101,6 +103,8 @@ def _project_stats(project: ProjectState) -> dict:
         "novelty_rate": project.metrics.novelty_rate,
         "mode": project.metrics.mode,
         "report_stale": project.report_stale,
+        "report_generation_mode": project.report_generation_mode,
+        "report_fallback_reason": project.report_fallback_reason,
         "prompt_safety_status": project.prompt_safety_status,
         "prompt_safety_violations_count": project.prompt_safety_violations_count,
     }
@@ -118,7 +122,12 @@ async def _generate_report_task(
         return
 
     try:
-        report = await synthesizer.synthesize(project)
+        if hasattr(synthesizer, "synthesize_with_meta"):
+            synthesis = await synthesizer.synthesize_with_meta(project)
+            report = synthesis["report"]
+        else:
+            report = await synthesizer.synthesize(project)
+            synthesis = {"is_fallback": False, "fallback_reason": None}
     except Exception as err:
         project.status = "running"
         project_service.save_project(project)
@@ -140,6 +149,8 @@ async def _generate_report_task(
     project.report_markdown = report
     project.report_generated_at = datetime.now(timezone.utc)
     project.report_stale = False
+    project.report_generation_mode = "fallback" if synthesis.get("is_fallback") else "llm"
+    project.report_fallback_reason = synthesis.get("fallback_reason")
     if project.finished_at is None:
         project.finished_at = datetime.now(timezone.utc)
     project.status = "done"
@@ -155,6 +166,8 @@ async def _generate_report_task(
             if project.report_generated_at
             else None,
             "report_stale": project.report_stale,
+            "report_generation_mode": project.report_generation_mode,
+            "report_fallback_reason": project.report_fallback_reason,
             "report_path": str(report_path),
         },
     )
@@ -271,6 +284,8 @@ def get_report(
             project.report_generated_at.isoformat() if project.report_generated_at else None
         ),
         report_stale=project.report_stale,
+        report_generation_mode=project.report_generation_mode,
+        report_fallback_reason=project.report_fallback_reason,
     )
 
 
@@ -299,9 +314,9 @@ async def start_project(
         propositions = [
             Proposition(
                 id="P001",
-                factor="Overall hackathon experience",
-                mechanism="Personal perception of events and constraints",
-                outcome="Positive or negative sentiment during participation",
+                factor="Overall respondent experience",
+                mechanism="Personal perception of key constraints and enablers",
+                outcome="Positive or negative sentiment related to the research question",
                 confidence=0.0,
                 status="untested",
             )
@@ -332,9 +347,9 @@ async def start_project(
         project.proposition_store = [
             Proposition(
                 id=project_service.next_proposition_id(project),
-                factor="Overall hackathon experience",
-                mechanism="Personal perception of events and constraints",
-                outcome="Positive or negative sentiment during participation",
+                factor="Overall respondent experience",
+                mechanism="Personal perception of key constraints and enablers",
+                outcome="Positive or negative sentiment related to the research question",
                 confidence=0.0,
                 status="untested",
             )
@@ -559,14 +574,50 @@ def get_qrcode(
 
 
 @router.get("/{project_id}/visualization/hypothesis-map", status_code=status.HTTP_200_OK)
-def get_hypothesis_map(
+async def get_hypothesis_map(
     project_id: str,
     project_service: ProjectService = Depends(get_project_service),
+    synthesizer: SynthesizerAgent = Depends(get_synthesizer_agent),
+    sse: SSEManager = Depends(get_sse_manager),
 ) -> dict:
     try:
         project = project_service.load_project(project_id)
     except ProjectNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
+
+    missing_english = [item for item in project.evidence_store if not str(item.quote_english or "").strip()]
+    translated_count = 0
+    translation_touched = False
+    if missing_english:
+        translation_map = await synthesizer.translate_evidence_quotes(project.evidence_store)
+        for evidence in project.evidence_store:
+            if str(evidence.quote_english or "").strip():
+                continue
+            quote_en = str(translation_map.get(evidence.id, "")).strip()
+            language = str(evidence.language or "").strip().lower()
+            if quote_en:
+                evidence.quote_english = quote_en
+                evidence.translation_status = "native_en" if language.startswith("en") else "translated"
+                translated_count += 1
+                translation_touched = True
+            elif language.startswith("en"):
+                evidence.quote_english = evidence.quote
+                evidence.translation_status = "native_en"
+                translated_count += 1
+                translation_touched = True
+            else:
+                evidence.translation_status = "failed"
+                translation_touched = True
+
+    if translation_touched:
+        project_service.save_project(project)
+        if translated_count:
+            await sse.emit(
+                project.id,
+                "translations_backfilled",
+                {"project_id": project.id, "translated_count": translated_count},
+            )
+
     return build_hypothesis_map(project)
 
 
@@ -597,13 +648,20 @@ async def synthesize(
     except ProjectNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
 
-    report = await synthesizer.synthesize(project)
+    if hasattr(synthesizer, "synthesize_with_meta"):
+        synthesis = await synthesizer.synthesize_with_meta(project)
+        report = synthesis["report"]
+    else:
+        report = await synthesizer.synthesize(project)
+        synthesis = {"is_fallback": False, "fallback_reason": None}
     report_path = Path(project_service.data_dir / project_id / "report.md")
     report_path.write_text(report, encoding="utf-8")
 
     project.report_markdown = report
     project.report_generated_at = datetime.now(timezone.utc)
     project.report_stale = False
+    project.report_generation_mode = "fallback" if synthesis.get("is_fallback") else "llm"
+    project.report_fallback_reason = synthesis.get("fallback_reason")
     if project.finished_at is None:
         project.finished_at = datetime.now(timezone.utc)
     project.status = "done"
@@ -617,6 +675,8 @@ async def synthesize(
             "status": project.status,
             "report_generated_at": project.report_generated_at.isoformat(),
             "report_stale": project.report_stale,
+            "report_generation_mode": project.report_generation_mode,
+            "report_fallback_reason": project.report_fallback_reason,
             "report_path": str(report_path),
         },
     )

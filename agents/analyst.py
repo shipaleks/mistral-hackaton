@@ -61,6 +61,7 @@ class AnalystAgent:
             if not isinstance(item, dict):
                 continue
             quote = str(item.get("quote", "")).strip()
+            quote_english = str(item.get("quote_english", "")).strip()
             interpretation = str(item.get("interpretation", "")).strip()
             factor = str(item.get("factor", "")).strip()
             mechanism = str(item.get("mechanism", "")).strip()
@@ -72,17 +73,29 @@ class AnalystAgent:
             if not isinstance(tags, list):
                 tags = []
 
+            language = str(item.get("language", "en")).strip() or "en"
+            language_lc = language.lower()
+            if language_lc.startswith("en"):
+                translation_status = "native_en"
+                quote_english = quote
+            elif quote_english:
+                translation_status = "translated"
+            else:
+                translation_status = "pending"
+
             new_evidence.append(
                 Evidence(
                     id=str(item.get("id", "")).strip(),
                     interview_id=interview_id,
                     quote=quote,
+                    quote_english=quote_english or None,
+                    translation_status=translation_status,
                     interpretation=interpretation,
                     factor=factor,
                     mechanism=mechanism,
                     outcome=outcome,
                     tags=[str(t) for t in tags if str(t).strip()],
-                    language=str(item.get("language", "en")).strip() or "en",
+                    language=language,
                 )
             )
 

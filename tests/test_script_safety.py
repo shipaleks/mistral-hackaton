@@ -8,7 +8,7 @@ from services.script_safety import ScriptSafetyGuard
 def _script_with_personal_memory() -> InterviewScript:
     return InterviewScript(
         version=2,
-        research_question="What is your experience with this hackathon so far?",
+        research_question="What shaped your onboarding experience in the first month?",
         opening_question="Earlier you mentioned some difficulties. Can we continue?",
         sections=[
             ScriptSection(
@@ -48,7 +48,7 @@ def test_script_safety_guard_detects_and_sanitizes() -> None:
 
     result = guard.enforce(
         script=script,
-        research_question="What is your experience with this hackathon so far?",
+        research_question="What shaped your onboarding experience in the first month?",
         propositions=propositions,
     )
 
@@ -63,8 +63,8 @@ def test_script_safety_guard_triggers_topic_redirect() -> None:
     guard = ScriptSafetyGuard()
     script = InterviewScript(
         version=1,
-        research_question="What is your experience with this hackathon so far?",
-        opening_question="How is your experience with this hackathon so far?",
+        research_question="What shaped your onboarding experience in the first month?",
+        opening_question="How was your onboarding experience in the first month?",
         sections=[
             ScriptSection(
                 proposition_id="P001",
@@ -95,10 +95,9 @@ def test_script_safety_guard_triggers_topic_redirect() -> None:
 
     result = guard.enforce(
         script=script,
-        research_question="What is your experience with this hackathon so far?",
+        research_question="What shaped your onboarding experience in the first month?",
         propositions=propositions,
     )
 
     assert result.topic_redirect_applied
-    assert "hackathon" in result.script.sections[0].main_question.lower()
-
+    assert "research question" in result.script.sections[0].main_question.lower()

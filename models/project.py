@@ -43,6 +43,8 @@ class ProjectState(BaseModel):
     report_markdown: str | None = None
     report_generated_at: datetime | None = None
     report_stale: bool = False
+    report_generation_mode: str = "none"
+    report_fallback_reason: str | None = None
     finished_at: datetime | None = None
 
     evidence_store: list[Evidence] = Field(default_factory=list)

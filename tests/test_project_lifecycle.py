@@ -141,6 +141,8 @@ async def test_generate_report_task_sets_done_and_report_fields(tmp_path):
     assert saved.report_generated_at is not None
     assert saved.finished_at is not None
     assert saved.report_stale is False
+    assert saved.report_generation_mode == "llm"
+    assert saved.report_fallback_reason is None
 
     events = []
     while not queue.empty():

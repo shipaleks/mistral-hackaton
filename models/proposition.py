@@ -27,6 +27,7 @@ class Proposition(BaseModel):
     status: PropositionStatus = "untested"
     supporting_evidence: list[str] = Field(default_factory=list)
     contradicting_evidence: list[str] = Field(default_factory=list)
+    heuristic_supporting_evidence: list[str] = Field(default_factory=list)
     first_seen_interview: int = 0
     last_updated_interview: int = 0
     interviews_without_new_evidence: int = 0

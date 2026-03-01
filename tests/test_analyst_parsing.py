@@ -69,3 +69,38 @@ async def test_analyst_coerces_partially_invalid_payload() -> None:
     assert len(result.proposition_updates) == 1
     assert result.metrics.convergence_score == 0.5
     assert result.prunes == ["P999"]
+    assert result.new_evidence[0].quote_english == "It was intense"
+    assert result.new_evidence[0].translation_status == "native_en"
+
+
+@pytest.mark.asyncio
+async def test_analyst_marks_non_english_translation_pending() -> None:
+    payload = {
+        "new_evidence": [
+            {
+                "id": "E100",
+                "quote": "Я почти не спал",
+                "interpretation": "Sleep deprivation",
+                "factor": "time pressure",
+                "mechanism": "sleep loss",
+                "outcome": "low focus",
+                "tags": ["fatigue"],
+                "language": "ru",
+            }
+        ],
+        "metrics": {"convergence_score": 0.2, "novelty_rate": 0.8, "mode": "divergent"},
+    }
+    analyst = AnalystAgent(FakeLLM(payload))
+
+    result = await analyst.analyze_interview(
+        transcript="User: Я почти не спал",
+        existing_evidence=[],
+        existing_propositions=[],
+        interview_id="INT_001",
+        interview_index=1,
+    )
+
+    assert len(result.new_evidence) == 1
+    evidence = result.new_evidence[0]
+    assert evidence.quote_english is None
+    assert evidence.translation_status == "pending"

@@ -82,6 +82,7 @@ app.include_router(webhook_router, prefix="/api")
 app.include_router(stream_router, prefix="/api")
 
 UI_FILE = Path(__file__).resolve().parent / "dashboard" / "projects.html"
+GRAPH_UI_FILE = Path(__file__).resolve().parent / "dashboard" / "graph.html"
 
 
 @app.get("/health")
@@ -100,4 +101,11 @@ def root():
 def ui():
     if UI_FILE.exists():
         return FileResponse(UI_FILE)
+    return {"service": "eidetic", "docs": "/docs"}
+
+
+@app.get("/ui/graph")
+def ui_graph():
+    if GRAPH_UI_FILE.exists():
+        return FileResponse(GRAPH_UI_FILE)
     return {"service": "eidetic", "docs": "/docs"}
