@@ -15,32 +15,57 @@ from models.project import ProjectState
 class SynthesizerAgent:
     def __init__(self, llm: LLMClient):
         self.llm = llm
-        self.system_prompt = load_prompt("synthesizer_system.txt")
+        self._prompt_cache: dict[str, str] = {}
+
+    def _get_system_prompt(self, language: str = "en") -> str:
+        if language not in self._prompt_cache:
+            self._prompt_cache[language] = load_prompt(
+                "synthesizer_system.txt", language=language
+            )
+        return self._prompt_cache[language]
 
     async def synthesize(self, project: ProjectState) -> str:
         result = await self.synthesize_with_meta(project)
         return result["report"]
 
     async def synthesize_with_meta(self, project: ProjectState) -> dict[str, Any]:
+        language = getattr(project, "language", "en") or "en"
+
         if len(project.interview_store) == 0 or len(project.evidence_store) == 0:
             return {
-                "report": self._no_data_report(project),
+                "report": self._no_data_report(project, language),
                 "is_fallback": True,
                 "fallback_reason": "No interview evidence in project",
             }
 
-        quote_translations = await self.translate_evidence_quotes(project.evidence_store)
+        if language == "ru":
+            quote_translations = await self.translate_evidence_quotes_to_russian(
+                project.evidence_store
+            )
+        else:
+            quote_translations = await self.translate_evidence_quotes(
+                project.evidence_store
+            )
+
         evidence_payload = []
         for evidence in project.evidence_store:
             item = evidence.model_dump(mode="json")
-            quote_en = str(quote_translations.get(evidence.id, "")).strip()
-            if not quote_en and str(evidence.language or "").lower().startswith("en"):
-                quote_en = evidence.quote.strip()
-            if not quote_en:
-                quote_en = "Translation unavailable"
-            item["quote_english"] = quote_en
+            translated = str(quote_translations.get(evidence.id, "")).strip()
+            if not translated:
+                lang = str(evidence.language or "").lower()
+                if language == "ru" and lang.startswith("ru"):
+                    translated = evidence.quote.strip()
+                elif language != "ru" and lang.startswith("en"):
+                    translated = evidence.quote.strip()
+            if not translated:
+                translated = "Перевод недоступен" if language == "ru" else "Translation unavailable"
+            if language == "ru":
+                item["quote_russian"] = translated
+            else:
+                item["quote_english"] = translated
             evidence_payload.append(item)
 
+        original_marker = '[оригинал: "..."]' if language == "ru" else '[original: "..."]'
         payload = {
             "research_question": project.research_question,
             "evidence": evidence_payload,
@@ -52,16 +77,17 @@ class SynthesizerAgent:
                 "must_use_only_provided_evidence": True,
                 "must_not_invent_quotes": True,
                 "must_not_invent_participant_labels": True,
-                "translated_quotes_must_include_original_marker": '[original: "..."]',
+                "translated_quotes_must_include_original_marker": original_marker,
             },
         }
 
+        system_prompt = self._get_system_prompt(language)
         llm_report: str | None = None
         llm_error: Exception | None = None
         try:
             llm_report = await self.llm.chat(
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
                 ],
                 temperature=0.2,
@@ -71,7 +97,9 @@ class SynthesizerAgent:
             llm_error = err
             print(f"[synthesizer] llm generation failed: {err}")
 
-        grounding_issue = self._grounding_issue(llm_report, project) if llm_report else None
+        grounding_issue = (
+            self._grounding_issue(llm_report, project, language) if llm_report else None
+        )
         if llm_report and grounding_issue is None:
             return {
                 "report": llm_report,
@@ -84,7 +112,9 @@ class SynthesizerAgent:
 
         reason = self._format_fallback_reason(llm_error, grounding_issue)
         return {
-            "report": self._grounded_fallback_report(project, reason, quote_translations),
+            "report": self._grounded_fallback_report(
+                project, reason, quote_translations, language
+            ),
             "is_fallback": True,
             "fallback_reason": reason,
         }
@@ -92,22 +122,33 @@ class SynthesizerAgent:
     def _is_grounded(self, report: str, project: ProjectState) -> bool:
         return self._grounding_issue(report, project) is None
 
-    def _grounding_issue(self, report: str, project: ProjectState) -> str | None:
+    def _grounding_issue(
+        self, report: str, project: ProjectState, language: str = "en"
+    ) -> str | None:
         text = report or ""
-        if re.search(r"\bParticipant\s+[A-Z]\b", text):
-            return "contains invented participant labels"
 
-        evidence_quotes = [self._norm(e.quote) for e in project.evidence_store if e.quote.strip()]
+        if language == "ru":
+            if re.search(r"\bУчастник\s+[А-ЯЁ]\b", text):
+                return "contains invented participant labels"
+        else:
+            if re.search(r"\bParticipant\s+[A-Z]\b", text):
+                return "contains invented participant labels"
+
+        evidence_quotes = [
+            self._norm(e.quote) for e in project.evidence_store if e.quote.strip()
+        ]
         if not evidence_quotes:
             return "no evidence quotes available for grounding"
 
-        original_markers = self._extract_original_markers(text)
+        original_markers = self._extract_original_markers(text, language)
         if original_markers:
             for original in original_markers:
                 if not self._matches_any_evidence_quote(original, evidence_quotes):
                     return "contains [original] quote not found in evidence store"
         else:
-            quote_candidates = re.findall(r"[\"“](.*?)[\"”]", text, flags=re.DOTALL)
+            quote_candidates = re.findall(
+                r'[""«](.*?)[""»]', text, flags=re.DOTALL
+            )
             for candidate in quote_candidates:
                 norm_candidate = self._norm(candidate)
                 if len(norm_candidate) < 10:
@@ -115,7 +156,7 @@ class SynthesizerAgent:
                 if not self._matches_any_evidence_quote(norm_candidate, evidence_quotes):
                     return "contains quoted text not found in evidence store"
 
-        if self._has_non_english_quotes(text):
+        if language != "ru" and self._has_non_english_quotes(text):
             return "contains non-English text outside [original] markers"
 
         return None
@@ -155,20 +196,32 @@ class SynthesizerAgent:
         intersection = left_tokens.intersection(right_tokens)
         return len(intersection) / max(1, min(len(left_tokens), len(right_tokens)))
 
-    def _extract_original_markers(self, report: str) -> list[str]:
-        blocks = re.findall(r"\[original:\s*(.*?)\]", report, flags=re.IGNORECASE | re.DOTALL)
+    def _extract_original_markers(
+        self, report: str, language: str = "en"
+    ) -> list[str]:
+        pattern = (
+            r"\[(?:оригинал|original):\s*(.*?)\]"
+            if language == "ru"
+            else r"\[original:\s*(.*?)\]"
+        )
+        blocks = re.findall(pattern, report, flags=re.IGNORECASE | re.DOTALL)
         values: list[str] = []
         for block in blocks:
             candidate = str(block).strip()
-            if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {"'", '"'}:
+            if (
+                len(candidate) >= 2
+                and candidate[0] == candidate[-1]
+                and candidate[0] in {"'", '"'}
+            ):
                 candidate = candidate[1:-1].strip()
             if candidate:
                 values.append(candidate)
         return values
 
     def _has_non_english_quotes(self, report: str) -> bool:
-        cleaned = re.sub(r"\[original:\s*.*?\]", "", report, flags=re.IGNORECASE | re.DOTALL)
-        # Reject clearly non-English scripts outside explicit original markers.
+        cleaned = re.sub(
+            r"\[original:\s*.*?\]", "", report, flags=re.IGNORECASE | re.DOTALL
+        )
         return bool(re.search(r"[А-Яа-яЁё\u3040-\u30ff\u3400-\u9fff]", cleaned))
 
     def _format_fallback_reason(
@@ -187,7 +240,11 @@ class SynthesizerAgent:
             detail = f"{detail[:257]}..."
         return f"LLM generation failed: {detail}"
 
-    async def translate_evidence_quotes(self, evidence_items: list[Evidence]) -> dict[str, str]:
+    # ── Translation helpers ──────────────────────────────────────────
+
+    async def translate_evidence_quotes(
+        self, evidence_items: list[Evidence]
+    ) -> dict[str, str]:
         translations: dict[str, str] = {}
         source_quotes: list[dict[str, str]] = []
 
@@ -222,7 +279,12 @@ class SynthesizerAgent:
             result = await self.llm.chat_json(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": json.dumps({"quotes": source_quotes}, ensure_ascii=False)},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"quotes": source_quotes}, ensure_ascii=False
+                        ),
+                    },
                 ],
                 temperature=0.0,
                 max_tokens=2048,
@@ -253,7 +315,95 @@ class SynthesizerAgent:
 
         return translations
 
+    async def translate_evidence_quotes_to_russian(
+        self, evidence_items: list[Evidence]
+    ) -> dict[str, str]:
+        translations: dict[str, str] = {}
+        source_quotes: list[dict[str, str]] = []
+
+        for evidence in evidence_items:
+            quote = evidence.quote.strip()
+            if not quote:
+                continue
+
+            language = (evidence.language or "").strip().lower()
+            if language.startswith("ru"):
+                translations[evidence.id] = quote
+                continue
+
+            source_quotes.append(
+                {
+                    "id": evidence.id,
+                    "language": language or "unknown",
+                    "quote": quote,
+                }
+            )
+
+        if not source_quotes or not hasattr(self.llm, "chat_json"):
+            return translations
+
+        system_prompt = (
+            "Ты переводишь цитаты из интервью на русский язык. "
+            "Верни строгий JSON с ключом `translations`, содержащим "
+            "список {id, russian}. Сохраняй точный смысл. Без лишних комментариев."
+        )
+
+        try:
+            result = await self.llm.chat_json(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"quotes": source_quotes}, ensure_ascii=False
+                        ),
+                    },
+                ],
+                temperature=0.0,
+                max_tokens=2048,
+            )
+        except Exception:
+            return translations
+
+        items: list[dict] = []
+        if isinstance(result.get("translations"), list):
+            items = [x for x in result["translations"] if isinstance(x, dict)]
+        elif isinstance(result, dict):
+            for key, value in result.items():
+                if isinstance(value, str):
+                    items.append({"id": key, "russian": value})
+
+        for item in items:
+            evidence_id = str(item.get("id") or "").strip()
+            russian = str(
+                item.get("russian")
+                or item.get("translation")
+                or item.get("translated")
+                or ""
+            ).strip()
+            if evidence_id and russian:
+                translations[evidence_id] = russian
+
+        return translations
+
+    # ── Fallback reports ─────────────────────────────────────────────
+
     def _grounded_fallback_report(
+        self,
+        project: ProjectState,
+        reason: str,
+        quote_translations: dict[str, str],
+        language: str = "en",
+    ) -> str:
+        if language == "ru":
+            return self._grounded_fallback_report_ru(
+                project, reason, quote_translations
+            )
+        return self._grounded_fallback_report_en(
+            project, reason, quote_translations
+        )
+
+    def _grounded_fallback_report_en(
         self,
         project: ProjectState,
         reason: str,
@@ -278,8 +428,12 @@ class SynthesizerAgent:
         lines.append("")
 
         lines.append("## Methodology Note")
-        lines.append("Interviews were processed through the webhook -> analyst -> designer pipeline.")
-        lines.append("Only stored evidence/proposition objects were used in this report.")
+        lines.append(
+            "Interviews were processed through the webhook -> analyst -> designer pipeline."
+        )
+        lines.append(
+            "Only stored evidence/proposition objects were used in this report."
+        )
         lines.append(f"Fallback reason: {reason}.")
         lines.append("")
 
@@ -299,7 +453,8 @@ class SynthesizerAgent:
                 )
                 lines.append(
                     f"Status: `{prop.status}` | Confidence: {prop.confidence:.2f} | "
-                    f"Supporting: {len(prop.supporting_evidence)} | Contradicting: {len(prop.contradicting_evidence)}"
+                    f"Supporting: {len(prop.supporting_evidence)} | "
+                    f"Contradicting: {len(prop.contradicting_evidence)}"
                 )
 
                 quote_lines = []
@@ -307,7 +462,9 @@ class SynthesizerAgent:
                     ev = evidence_by_id.get(eid)
                     if ev and ev.quote.strip():
                         original_quote = self._escape_inline_quote(ev.quote)
-                        translated = str(quote_translations.get(ev.id, "")).strip()
+                        translated = str(
+                            quote_translations.get(ev.id, "")
+                        ).strip()
                         if translated:
                             english_quote = self._escape_inline_quote(translated)
                         elif str(ev.language or "").lower().startswith("en"):
@@ -315,10 +472,13 @@ class SynthesizerAgent:
                         else:
                             english_quote = "Translation unavailable"
                         if self._norm(original_quote) == self._norm(english_quote):
-                            quote_lines.append(f"- [{ev.id}] \"{english_quote}\"")
+                            quote_lines.append(
+                                f'- [{ev.id}] "{english_quote}"'
+                            )
                         else:
                             quote_lines.append(
-                                f"- [{ev.id}] \"{english_quote}\" [original: \"{original_quote}\"]"
+                                f'- [{ev.id}] "{english_quote}" '
+                                f'[original: "{original_quote}"]'
                             )
 
                 if quote_lines:
@@ -329,20 +489,28 @@ class SynthesizerAgent:
                 lines.append("")
 
         lines.append("## Contradictions & Caveats")
-        contradicted = [p for p in project.proposition_store if len(p.contradicting_evidence) > 0]
+        contradicted = [
+            p
+            for p in project.proposition_store
+            if len(p.contradicting_evidence) > 0
+        ]
         if contradicted:
             for prop in contradicted[:5]:
                 lines.append(
-                    f"- `{prop.id}` has {len(prop.contradicting_evidence)} contradicting evidence item(s)."
+                    f"- `{prop.id}` has {len(prop.contradicting_evidence)} "
+                    f"contradicting evidence item(s)."
                 )
         else:
-            lines.append("- No explicit contradicting mappings were recorded yet.")
+            lines.append(
+                "- No explicit contradicting mappings were recorded yet."
+            )
         lines.append("")
 
         lines.append("## Raw Evidence Samples")
         for ev in project.evidence_store[:8]:
             lines.append(
-                f"- [{ev.id}] ({ev.language}) {ev.factor} -> {ev.mechanism} -> {ev.outcome}"
+                f"- [{ev.id}] ({ev.language}) "
+                f"{ev.factor} -> {ev.mechanism} -> {ev.outcome}"
             )
             original_quote = self._escape_inline_quote(ev.quote)
             translated = str(quote_translations.get(ev.id, "")).strip()
@@ -353,25 +521,197 @@ class SynthesizerAgent:
             else:
                 english_quote = "Translation unavailable"
             if self._norm(original_quote) == self._norm(english_quote):
-                lines.append(f"  Quote (EN): \"{english_quote}\"")
+                lines.append(f'  Quote (EN): "{english_quote}"')
             else:
                 lines.append(
-                    f"  Quote (EN): \"{english_quote}\" [original: \"{original_quote}\"]"
+                    f'  Quote (EN): "{english_quote}" '
+                    f'[original: "{original_quote}"]'
                 )
         lines.append("")
 
         lines.append("## Next Steps")
         lines.append("1. Collect additional interviews to improve coverage.")
-        lines.append("2. Re-run report generation after new evidence is ingested.")
-        lines.append("3. Manually inspect proposition mappings with low confidence.")
+        lines.append(
+            "2. Re-run report generation after new evidence is ingested."
+        )
+        lines.append(
+            "3. Manually inspect proposition mappings with low confidence."
+        )
         lines.append("")
         lines.append(
-            f"_Generated at {datetime.now(timezone.utc).isoformat()} from in-project data only._"
+            f"_Generated at {datetime.now(timezone.utc).isoformat()} "
+            f"from in-project data only._"
         )
 
         return "\n".join(lines)
 
-    def _no_data_report(self, project: ProjectState) -> str:
+    def _grounded_fallback_report_ru(
+        self,
+        project: ProjectState,
+        reason: str,
+        quote_translations: dict[str, str],
+    ) -> str:
+        evidence_by_id = {e.id: e for e in project.evidence_store}
+        total_interviews = len(project.interview_store)
+        total_evidence = len(project.evidence_store)
+
+        lines: list[str] = []
+        lines.append(
+            "# Отчёт по качественному исследованию (резервный вариант)"
+        )
+        lines.append("")
+        lines.append("## Резюме")
+        lines.append(
+            f"Этот отчёт сгенерирован только на основе сохранённых свидетельств проекта. "
+            f"Охват данных: {total_interviews} интервью, {total_evidence} единиц свидетельств."
+        )
+        lines.append(
+            f"Текущая конвергенция: {project.metrics.convergence_score:.2f}, "
+            f"новизна: {project.metrics.novelty_rate:.2f}, режим: {project.metrics.mode}."
+        )
+        lines.append("")
+
+        lines.append("## Методологическая заметка")
+        lines.append(
+            "Интервью обрабатывались через пайплайн: вебхук → аналитик → дизайнер."
+        )
+        lines.append(
+            "В отчёте использованы только сохранённые свидетельства и пропозиции."
+        )
+        lines.append(f"Причина резервной генерации: {reason}.")
+        lines.append("")
+
+        lines.append("## Основные находки")
+        propositions = sorted(
+            project.proposition_store,
+            key=lambda p: (p.confidence, len(p.supporting_evidence)),
+            reverse=True,
+        )
+
+        if not propositions:
+            lines.append("Пропозиции пока не сформированы.")
+        else:
+            for idx, prop in enumerate(propositions[:5], start=1):
+                lines.append(
+                    f"### {idx}. {prop.factor} → {prop.mechanism} → {prop.outcome}"
+                )
+                lines.append(
+                    f"Статус: `{prop.status}` | Уверенность: {prop.confidence:.2f} | "
+                    f"Поддерживающих: {len(prop.supporting_evidence)} | "
+                    f"Противоречащих: {len(prop.contradicting_evidence)}"
+                )
+
+                quote_lines = []
+                for eid in prop.supporting_evidence[:3]:
+                    ev = evidence_by_id.get(eid)
+                    if ev and ev.quote.strip():
+                        original_quote = self._escape_inline_quote(ev.quote)
+                        translated = str(
+                            quote_translations.get(ev.id, "")
+                        ).strip()
+                        if translated:
+                            display_quote = self._escape_inline_quote(translated)
+                        elif str(ev.language or "").lower().startswith("ru"):
+                            display_quote = original_quote
+                        else:
+                            display_quote = "Перевод недоступен"
+                        if self._norm(original_quote) == self._norm(
+                            display_quote
+                        ):
+                            quote_lines.append(
+                                f'- [{ev.id}] "{display_quote}"'
+                            )
+                        else:
+                            quote_lines.append(
+                                f'- [{ev.id}] "{display_quote}" '
+                                f'[оригинал: "{original_quote}"]'
+                            )
+
+                if quote_lines:
+                    lines.append("Поддерживающие цитаты:")
+                    lines.extend(quote_lines)
+                else:
+                    lines.append("Поддерживающие цитаты: пока не привязаны.")
+                lines.append("")
+
+        lines.append("## Противоречия и оговорки")
+        contradicted = [
+            p
+            for p in project.proposition_store
+            if len(p.contradicting_evidence) > 0
+        ]
+        if contradicted:
+            for prop in contradicted[:5]:
+                lines.append(
+                    f"- `{prop.id}` имеет {len(prop.contradicting_evidence)} "
+                    f"противоречащих свидетельств."
+                )
+        else:
+            lines.append("- Явных противоречий пока не зафиксировано.")
+        lines.append("")
+
+        lines.append("## Примеры свидетельств")
+        for ev in project.evidence_store[:8]:
+            lines.append(
+                f"- [{ev.id}] ({ev.language}) "
+                f"{ev.factor} → {ev.mechanism} → {ev.outcome}"
+            )
+            original_quote = self._escape_inline_quote(ev.quote)
+            translated = str(quote_translations.get(ev.id, "")).strip()
+            if translated:
+                display_quote = self._escape_inline_quote(translated)
+            elif str(ev.language or "").lower().startswith("ru"):
+                display_quote = original_quote
+            else:
+                display_quote = "Перевод недоступен"
+            if self._norm(original_quote) == self._norm(display_quote):
+                lines.append(f'  Цитата: "{display_quote}"')
+            else:
+                lines.append(
+                    f'  Цитата: "{display_quote}" '
+                    f'[оригинал: "{original_quote}"]'
+                )
+        lines.append("")
+
+        lines.append("## Следующие шаги")
+        lines.append("1. Провести дополнительные интервью для улучшения охвата.")
+        lines.append(
+            "2. Повторно запустить генерацию отчёта после поступления новых свидетельств."
+        )
+        lines.append(
+            "3. Вручную проверить привязки пропозиций с низкой уверенностью."
+        )
+        lines.append("")
+        lines.append(
+            f"_Сгенерировано {datetime.now(timezone.utc).isoformat()} "
+            f"только из данных проекта._"
+        )
+
+        return "\n".join(lines)
+
+    def _no_data_report(
+        self, project: ProjectState, language: str = "en"
+    ) -> str:
+        if language == "ru":
+            return "\n".join(
+                [
+                    "# Отчёт не готов",
+                    "",
+                    "## Почему генерация отчёта заблокирована",
+                    "В проекте пока нет сохранённых свидетельств из интервью.",
+                    "",
+                    "## Состояние проекта",
+                    f"- ID проекта: `{project.id}`",
+                    f"- Исследовательский вопрос: {project.research_question}",
+                    f"- Интервью: {len(project.interview_store)}",
+                    f"- Свидетельств: {len(project.evidence_store)}",
+                    "",
+                    "## Что делать дальше",
+                    "1. Убедитесь, что URL вебхука ElevenLabs указывает на `/api/webhook/elevenlabs`.",
+                    "2. Проведите хотя бы одно интервью и подтвердите увеличение счётчиков.",
+                    "3. Снова нажмите «Завершить и сгенерировать отчёт».",
+                ]
+            )
         return "\n".join(
             [
                 "# Report Not Ready",
@@ -393,7 +733,9 @@ class SynthesizerAgent:
         )
 
     def _norm(self, text: str) -> str:
-        normalized = re.sub(r"[^\w\s]", "", text.lower(), flags=re.UNICODE).replace("_", " ")
+        normalized = re.sub(
+            r"[^\w\s]", "", text.lower(), flags=re.UNICODE
+        ).replace("_", " ")
         return re.sub(r"\s+", " ", normalized).strip()
 
     def _escape_inline_quote(self, text: str) -> str:

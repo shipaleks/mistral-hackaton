@@ -14,6 +14,13 @@ _PERSONAL_PATTERNS = [
     re.compile(r"\bfrom\s+what\s+you\s+said\b", re.IGNORECASE),
 ]
 
+_PERSONAL_PATTERNS_RU = [
+    re.compile(r"\bранее\s+вы\s+упоминали\b", re.IGNORECASE),
+    re.compile(r"\bвы\s+(говорили|рассказывали|описывали|сказали|упоминали)\b", re.IGNORECASE),
+    re.compile(r"\bкак\s+мы\s+обсуждали\b", re.IGNORECASE),
+    re.compile(r"\bиз\s+того,?\s+что\s+вы\s+сказали\b", re.IGNORECASE),
+]
+
 _TOPIC_DRIFT_PATTERNS = [
     re.compile(r"\byour\s+project\b", re.IGNORECASE),
     re.compile(r"\btech\s+stack\b", re.IGNORECASE),
@@ -21,6 +28,15 @@ _TOPIC_DRIFT_PATTERNS = [
     re.compile(r"\bimplementation\b", re.IGNORECASE),
     re.compile(r"\bapi\s+integration\b", re.IGNORECASE),
     re.compile(r"\binfrastructure\b", re.IGNORECASE),
+]
+
+_TOPIC_DRIFT_PATTERNS_RU = [
+    re.compile(r"\bваш\w*\s+проект\w*\b", re.IGNORECASE),
+    re.compile(r"\bстек\w*\s+технологи\w*\b", re.IGNORECASE),
+    re.compile(r"\bкодов\w*\s+баз\w*\b", re.IGNORECASE),
+    re.compile(r"\bреализаци\w*\b", re.IGNORECASE),
+    re.compile(r"\bинтеграци\w*\s+api\b", re.IGNORECASE),
+    re.compile(r"\bинфраструктур\w*\b", re.IGNORECASE),
 ]
 
 
@@ -59,7 +75,20 @@ class ScriptSafetyResult:
 
 
 class ScriptSafetyGuard:
-    def validate_script(self, script: InterviewScript) -> list[ScriptViolation]:
+
+    def _personal_patterns(self, language: str = "en"):
+        if language == "ru":
+            return _PERSONAL_PATTERNS + _PERSONAL_PATTERNS_RU
+        return _PERSONAL_PATTERNS
+
+    def _topic_drift_patterns(self, language: str = "en"):
+        if language == "ru":
+            return _TOPIC_DRIFT_PATTERNS + _TOPIC_DRIFT_PATTERNS_RU
+        return _TOPIC_DRIFT_PATTERNS
+
+    def validate_script(
+        self, script: InterviewScript, language: str = "en"
+    ) -> list[ScriptViolation]:
         violations: list[ScriptViolation] = []
 
         self._check_text(
@@ -67,18 +96,21 @@ class ScriptSafetyGuard:
             field="opening_question",
             section_index=None,
             violations=violations,
+            language=language,
         )
         self._check_text(
             text=script.closing_question,
             field="closing_question",
             section_index=None,
             violations=violations,
+            language=language,
         )
         self._check_text(
             text=script.wildcard,
             field="wildcard",
             section_index=None,
             violations=violations,
+            language=language,
         )
 
         for idx, section in enumerate(script.sections):
@@ -87,12 +119,14 @@ class ScriptSafetyGuard:
                 field="main_question",
                 section_index=idx,
                 violations=violations,
+                language=language,
             )
             self._check_text(
                 text=section.context,
                 field="context",
                 section_index=idx,
                 violations=violations,
+                language=language,
             )
             for probe_idx, probe in enumerate(section.probes):
                 self._check_text(
@@ -100,6 +134,7 @@ class ScriptSafetyGuard:
                     field=f"probes[{probe_idx}]",
                     section_index=idx,
                     violations=violations,
+                    language=language,
                 )
         return violations
 
@@ -108,8 +143,9 @@ class ScriptSafetyGuard:
         script: InterviewScript,
         research_question: str,
         propositions: list[Proposition],
+        language: str = "en",
     ) -> ScriptSafetyResult:
-        violations = self.validate_script(script)
+        violations = self.validate_script(script, language=language)
         proposition_index = {p.id: p for p in propositions}
         topic_redirect_applied = False
         safe_sections: list[ScriptSection] = []
@@ -118,29 +154,29 @@ class ScriptSafetyGuard:
         for section in script.sections:
             proposition = proposition_index.get(section.proposition_id)
             original_main = str(section.main_question or "").strip()
-            main_question = self._sanitize_text(section.main_question)
-            if self._has_personal_reference(main_question) or not main_question.strip():
-                main_question = self._fallback_question(proposition, research_question)
+            main_question = self._sanitize_text(section.main_question, language=language)
+            if self._has_personal_reference(main_question, language=language) or not main_question.strip():
+                main_question = self._fallback_question(proposition, research_question, language=language)
 
-            if self._is_topic_drift(main_question, research_question):
-                main_question = self._topic_redirect_question(main_question, research_question)
+            if self._is_topic_drift(main_question, research_question, language=language):
+                main_question = self._topic_redirect_question(main_question, research_question, language=language)
                 topic_redirect_applied = True
 
             probes: list[str] = []
             for probe in section.probes[:3]:
-                cleaned = self._sanitize_text(probe)
+                cleaned = self._sanitize_text(probe, language=language)
                 if not cleaned:
                     continue
-                if self._is_topic_drift(cleaned, research_question):
-                    cleaned = self._topic_redirect_probe(cleaned, research_question)
+                if self._is_topic_drift(cleaned, research_question, language=language):
+                    cleaned = self._topic_redirect_probe(cleaned, research_question, language=language)
                     topic_redirect_applied = True
                 if cleaned not in probes:
                     probes.append(cleaned)
 
             if not probes:
-                probes = self._default_probes(research_question)
+                probes = self._default_probes(research_question, language=language)
 
-            context = self._safe_context(section.proposition_id, proposition)
+            context = self._safe_context(section.proposition_id, proposition, language=language)
             if (
                 main_question.strip() != original_main
                 or context.strip() != str(section.context or "").strip()
@@ -159,19 +195,22 @@ class ScriptSafetyGuard:
                 )
             )
 
-        safe_opening = self._sanitize_text(script.opening_question)
-        if self._has_personal_reference(safe_opening) or not safe_opening.strip():
-            safe_opening = self._default_opening(research_question)
+        safe_opening = self._sanitize_text(script.opening_question, language=language)
+        if self._has_personal_reference(safe_opening, language=language) or not safe_opening.strip():
+            safe_opening = self._default_opening(research_question, language=language)
 
-        safe_closing = self._sanitize_text(script.closing_question)
-        if self._has_personal_reference(safe_closing) or not safe_closing.strip():
-            safe_closing = self._default_closing(research_question)
+        safe_closing = self._sanitize_text(script.closing_question, language=language)
+        if self._has_personal_reference(safe_closing, language=language) or not safe_closing.strip():
+            safe_closing = self._default_closing(research_question, language=language)
 
-        safe_wildcard = self._sanitize_text(script.wildcard)
-        if self._has_personal_reference(safe_wildcard) or not safe_wildcard.strip():
-            safe_wildcard = (
-                "Is there anything else about your experience with this research topic that we should capture?"
-            )
+        safe_wildcard = self._sanitize_text(script.wildcard, language=language)
+        if self._has_personal_reference(safe_wildcard, language=language) or not safe_wildcard.strip():
+            if language == "ru":
+                safe_wildcard = "Есть ли что-то ещё о вашем опыте по этой теме, что стоит зафиксировать?"
+            else:
+                safe_wildcard = (
+                    "Is there anything else about your experience with this research topic that we should capture?"
+                )
 
         safe_script = script.model_copy(deep=True)
         safe_script.opening_question = safe_opening
@@ -186,6 +225,11 @@ class ScriptSafetyGuard:
         ):
             script_changed = True
 
+        fallback_context = (
+            "Резервная секция, сгенерированная защитой" if language == "ru"
+            else "Fallback section generated by safety guard"
+        )
+
         status = "ok"
         if violations:
             status = "sanitized" if safe_sections else "fallback"
@@ -195,9 +239,9 @@ class ScriptSafetyGuard:
                     proposition_id="P000",
                     priority="high",
                     instruction="EXPLORE",
-                    main_question=self._default_opening(research_question),
-                    probes=self._default_probes(research_question),
-                    context="Fallback section generated by safety guard",
+                    main_question=self._default_opening(research_question, language=language),
+                    probes=self._default_probes(research_question, language=language),
+                    context=fallback_context,
                 )
             ]
             script_changed = True
@@ -218,11 +262,12 @@ class ScriptSafetyGuard:
         field: str,
         section_index: int | None,
         violations: list[ScriptViolation],
+        language: str = "en",
     ) -> None:
         value = str(text or "").strip()
         if not value:
             return
-        for pattern in _PERSONAL_PATTERNS:
+        for pattern in self._personal_patterns(language):
             if pattern.search(value):
                 violations.append(
                     ScriptViolation(
@@ -234,7 +279,7 @@ class ScriptSafetyGuard:
                 )
                 break
 
-    def _sanitize_text(self, text: str) -> str:
+    def _sanitize_text(self, text: str, language: str = "en") -> str:
         value = str(text or "").strip()
         if not value:
             return ""
@@ -245,63 +290,107 @@ class ScriptSafetyGuard:
             (r"\b[Yy]ou\s+(said|told|described|shared|mentioned)\b", "Some participants reported"),
             (r"\b[Aa]s\s+we\s+discussed\b", "From previous interviews"),
         ]
+        if language == "ru":
+            replacements += [
+                (r"\b[Рр]анее,?\s*вы\s+упоминали\b", "Некоторые участники упоминали"),
+                (r"\b[Вв]ы\s+(говорили|рассказывали|описывали|сказали|упоминали)\b",
+                 "Некоторые участники отмечали"),
+                (r"\b[Кк]ак\s+мы\s+обсуждали\b", "По результатам предыдущих интервью"),
+            ]
+
         for pattern, replacement in replacements:
             value = re.sub(pattern, replacement, value)
         return re.sub(r"\s+", " ", value).strip()
 
-    def _has_personal_reference(self, text: str) -> bool:
+    def _has_personal_reference(self, text: str, language: str = "en") -> bool:
         value = str(text or "")
-        return any(pattern.search(value) for pattern in _PERSONAL_PATTERNS)
+        return any(pattern.search(value) for pattern in self._personal_patterns(language))
 
-    def _is_topic_drift(self, text: str, research_question: str) -> bool:
+    def _is_topic_drift(self, text: str, research_question: str, language: str = "en") -> bool:
         value = str(text or "")
         rq_tokens = _tokenize(research_question or "")
         text_tokens = _tokenize(value)
         if rq_tokens and _jaccard(rq_tokens, text_tokens) >= 0.18:
             return False
-        return any(pattern.search(value) for pattern in _TOPIC_DRIFT_PATTERNS)
+        return any(pattern.search(value) for pattern in self._topic_drift_patterns(language))
 
-    def _topic_redirect_question(self, text: str, research_question: str) -> str:
+    def _topic_redirect_question(self, text: str, research_question: str, language: str = "en") -> str:
+        if language == "ru":
+            return (
+                f"Можете ли вы связать это с основным исследовательским вопросом: "
+                f"'{research_question}'?"
+            )
         return (
             f"Could you connect this back to the main research question: "
             f"'{research_question}'?"
         )
 
-    def _topic_redirect_probe(self, text: str, research_question: str) -> str:
+    def _topic_redirect_probe(self, text: str, research_question: str, language: str = "en") -> str:
+        if language == "ru":
+            return "Как это повлияло на ваш опыт в контексте основной темы исследования?"
         return "How did this influence your experience with the core research topic?"
 
     def _fallback_question(
         self,
         proposition: Proposition | None,
         research_question: str,
+        language: str = "en",
     ) -> str:
         if proposition is None:
-            return self._default_opening(research_question)
+            return self._default_opening(research_question, language=language)
+        if language == "ru":
+            return (
+                f"Как {proposition.factor.lower()} повлиял(а) на ваш опыт по этой теме, "
+                f"и к каким результатам это привело?"
+            )
         return (
             f"How did {proposition.factor.lower()} influence your experience with this topic, "
             f"and what outcomes did it create?"
         )
 
-    def _safe_context(self, proposition_id: str, proposition: Proposition | None) -> str:
+    def _safe_context(self, proposition_id: str, proposition: Proposition | None, language: str = "en") -> str:
         if proposition is None:
+            if language == "ru":
+                return f"Исследуй пропозицию {proposition_id} в агрегированном виде, без ссылок на конкретных респондентов."
             return f"Explore proposition {proposition_id} in aggregate, without respondent-specific references."
+        if language == "ru":
+            return (
+                f"Агрегированный фокус для {proposition_id}: {proposition.factor} → {proposition.mechanism} → "
+                f"{proposition.outcome}. Формулировки должны быть обезличенными."
+            )
         return (
             f"Aggregate focus for {proposition_id}: {proposition.factor} -> {proposition.mechanism} -> "
             f"{proposition.outcome}. Keep wording respondent-agnostic."
         )
 
-    def _default_opening(self, research_question: str) -> str:
+    def _default_opening(self, research_question: str, language: str = "en") -> str:
+        if language == "ru":
+            return (
+                f"Расскажите о вашем опыте, связанном с исследовательским вопросом: "
+                f"'{research_question}'?"
+            )
         return (
             f"Could you describe your experience related to this research question: "
             f"'{research_question}'?"
         )
 
-    def _default_closing(self, research_question: str) -> str:
+    def _default_closing(self, research_question: str, language: str = "en") -> str:
+        if language == "ru":
+            return (
+                "Прежде чем мы закончим, что было самым важным в вашем опыте, "
+                "связанном с этим исследовательским вопросом?"
+            )
         return (
             "Before we end, what was the most important part of your experience related to this research question?"
         )
 
-    def _default_probes(self, research_question: str) -> list[str]:
+    def _default_probes(self, research_question: str, language: str = "en") -> list[str]:
+        if language == "ru":
+            return [
+                "Можете привести конкретный пример по этой теме?",
+                "Как это повлияло на ваш опыт?",
+                "Менялось ли это со временем?",
+            ]
         return [
             "Can you give a concrete example related to this topic?",
             "What impact did this have on your experience?",

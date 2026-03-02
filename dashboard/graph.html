@@ -162,14 +162,14 @@
     <div class="page">
       <div class="top">
         <div>
-          <div><strong id="title">Graph View</strong></div>
+          <div><strong id="title" data-t="graph_title">Graph View</strong></div>
           <div class="muted" id="subtitle">Loading project...</div>
         </div>
         <div class="row">
-          <a class="button" href="/">Back to workspace</a>
-          <button id="reloadBtn">Reload</button>
-          <button id="hypothesisBtn" class="active">Hypothesis Map</button>
-          <button id="networkBtn">Evidence Network</button>
+          <a class="button" href="/" data-t="back_to_workspace">Back to workspace</a>
+          <button id="reloadBtn" data-t="reload">Reload</button>
+          <button id="hypothesisBtn" class="active" data-t="hypothesis_map">Hypothesis Map</button>
+          <button id="networkBtn" data-t="evidence_network">Evidence Network</button>
         </div>
       </div>
 
@@ -179,13 +179,13 @@
           <div class="legend" id="legend"></div>
         </div>
         <aside class="side">
-          <div class="mini" id="summary">No data yet.</div>
+          <div class="mini" id="summary" data-t="no_data">No data yet.</div>
           <div>
-            <strong>Selected Item</strong>
+            <strong data-t="selected_item">Selected Item</strong>
             <div id="selected" class="row" style="display:grid; gap:8px; margin-top:8px;"></div>
           </div>
           <div>
-            <strong>Research Progress</strong>
+            <strong data-t="research_progress">Research Progress</strong>
             <div id="progress" class="row" style="display:grid; gap:8px; margin-top:8px;"></div>
           </div>
           <div class="status" id="status"></div>
@@ -194,6 +194,62 @@
     </div>
 
     <script>
+      const TRANSLATIONS = {
+        en: {
+          graph_title: "Graph View",
+          back_to_workspace: "Back to workspace",
+          reload: "Reload",
+          hypothesis_map: "Hypothesis Map",
+          evidence_network: "Evidence Network",
+          selected_item: "Selected Item",
+          research_progress: "Research Progress",
+          no_data: "No data yet.",
+          no_evidence: "No evidence yet.",
+          no_hypotheses: "No hypotheses yet.",
+          no_node: "No node selected.",
+          click_node: "Click a node to inspect details.",
+          no_linked: "No linked evidence yet.",
+          translation_pending: "Translation pending",
+          no_link_explanation: "No link explanation yet.",
+          all_confirmed: "All hypotheses have confirmed links.",
+          network_hint: "Evidence Network mode shows similarity links (>= 0.70).",
+          missing_project: "Missing project_id in query",
+        },
+        ru: {
+          graph_title: "Граф",
+          back_to_workspace: "Назад к проекту",
+          reload: "Обновить",
+          hypothesis_map: "Карта гипотез",
+          evidence_network: "Сеть свидетельств",
+          selected_item: "Выбранный элемент",
+          research_progress: "Прогресс исследования",
+          no_data: "Пока нет данных.",
+          no_evidence: "Пока нет свидетельств.",
+          no_hypotheses: "Пока нет гипотез.",
+          no_node: "Узел не выбран.",
+          click_node: "Нажмите на узел для просмотра деталей.",
+          no_linked: "Нет связанных свидетельств.",
+          translation_pending: "Перевод ожидается",
+          no_link_explanation: "Нет объяснения связи.",
+          all_confirmed: "Все гипотезы имеют подтверждённые связи.",
+          network_hint: "Сеть свидетельств: связи по сходству (>= 0.70).",
+          missing_project: "Отсутствует project_id в запросе",
+        },
+      };
+
+      let currentUILang = localStorage.getItem("eidetic_ui_lang") || "en";
+
+      function T(key) {
+        return (TRANSLATIONS[currentUILang] || TRANSLATIONS.en)[key] || (TRANSLATIONS.en[key] || key);
+      }
+
+      function applyTranslations() {
+        document.querySelectorAll("[data-t]").forEach((el) => {
+          const key = el.getAttribute("data-t");
+          el.textContent = T(key);
+        });
+      }
+
       const params = new URLSearchParams(window.location.search);
       const projectId = params.get("project_id") || "";
 
@@ -646,7 +702,7 @@
 
       async function load() {
         if (!projectId) {
-          setStatus("Missing project_id in query", true);
+          setStatus(T("missing_project"), true);
           return;
         }
         try {
@@ -656,7 +712,16 @@
           ]);
           state.project = project;
           state.map = map;
-          els.title.textContent = `Graph View: ${project.id}`;
+
+          const projectLang = project.language || "en";
+          if (projectLang !== currentUILang) {
+            currentUILang = projectLang;
+            localStorage.setItem("eidetic_ui_lang", projectLang);
+            applyTranslations();
+          }
+
+          els.title.textContent = `${T("graph_title")}: ${project.id}`;
+          els.title.removeAttribute("data-t");
           els.subtitle.textContent = project.research_question || "";
           render();
           setStatus(`Loaded at ${new Date().toLocaleTimeString()}`);
@@ -699,6 +764,7 @@
       els.networkBtn.onclick = () => switchMode("network");
 
       ensureGraph();
+      applyTranslations();
       switchMode(state.mode);
       load();
       connectSSE();

@@ -38,7 +38,11 @@ class ProjectService:
         return self._project_file(project_id).exists()
 
     def create_project(
-        self, project_id: str, research_question: str, initial_angles: list[str] | None = None
+        self,
+        project_id: str,
+        research_question: str,
+        initial_angles: list[str] | None = None,
+        language: str = "en",
     ) -> ProjectState:
         if self.exists(project_id):
             raise ProjectAlreadyExistsError(f"Project '{project_id}' already exists")
@@ -47,6 +51,7 @@ class ProjectService:
             id=project_id,
             research_question=research_question,
             initial_angles=initial_angles or [],
+            language=language,
             status="draft",
         )
         self._project_dir(project_id).mkdir(parents=True, exist_ok=True)
@@ -204,6 +209,7 @@ class ProjectService:
             "report_stale": project.report_stale,
             "prompt_safety_status": project.prompt_safety_status,
             "prompt_safety_violations_count": project.prompt_safety_violations_count,
+            "language": getattr(project, "language", "en"),
         }
 
     def project_summary(self, project_id: str) -> dict[str, Any]:

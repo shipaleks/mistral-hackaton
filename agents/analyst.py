@@ -24,7 +24,14 @@ _VALID_STATUSES = {
 class AnalystAgent:
     def __init__(self, llm: LLMClient):
         self.llm = llm
-        self.system_prompt = load_prompt("analyst_system.txt")
+        self._prompt_cache: dict[str, str] = {}
+
+    def _get_system_prompt(self, language: str = "en") -> str:
+        if language not in self._prompt_cache:
+            self._prompt_cache[language] = load_prompt(
+                "analyst_system.txt", language=language
+            )
+        return self._prompt_cache[language]
 
     async def analyze_interview(
         self,
@@ -33,7 +40,9 @@ class AnalystAgent:
         existing_propositions: list[Proposition],
         interview_id: str,
         interview_index: int,
+        language: str = "en",
     ) -> AnalysisResult:
+        system_prompt = self._get_system_prompt(language)
         user_payload = {
             "task": "Analyze a single interview and return JSON only",
             "interview_id": interview_id,
@@ -44,7 +53,7 @@ class AnalystAgent:
 
         payload = await self.llm.chat_json(
             messages=[
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
             ],
             temperature=0.3,

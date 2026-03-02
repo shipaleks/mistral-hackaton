@@ -509,25 +509,32 @@
       <aside class="sidebar">
         <div class="brand">
           <h1>Eidetic</h1>
-          <p class="muted">Create project, run interviews, review evidence map, generate report.</p>
+          <p class="muted" data-t="brand_description">Create project, run interviews, review evidence map, generate report.</p>
         </div>
 
         <div class="card">
-          <h3>Create Project</h3>
+          <h3 data-t="create_project">Create Project</h3>
           <div class="form" style="margin-top:8px;">
             <label>
-              Research question
+              <span data-t="research_question">Research question</span>
               <textarea id="researchQuestion">What factors shape your experience with this topic?</textarea>
             </label>
+            <label>
+              <span data-t="language_label">Project language</span>
+              <select id="projectLanguage" style="width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); padding:8px; font-size:14px; font-family:inherit;">
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+              </select>
+            </label>
             <div class="row">
-              <button class="primary" id="createProjectBtn">Create project</button>
+              <button class="primary" id="createProjectBtn" data-t="create_btn">Create project</button>
             </div>
             <div class="status" id="createStatus"></div>
           </div>
         </div>
 
         <div class="card" style="margin-top:10px;">
-          <h3>Projects</h3>
+          <h3 data-t="projects">Projects</h3>
           <div id="projectsList" class="projects-list"></div>
         </div>
       </aside>
@@ -536,52 +543,52 @@
         <section class="card flow-head">
           <div class="flow-top">
             <div>
-              <h2 id="projectTitle">Select or create a project</h2>
-              <p class="muted" id="projectQuestion">Research question will appear here.</p>
+              <h2 id="projectTitle" data-t="select_or_create">Select or create a project</h2>
+              <p class="muted" id="projectQuestion" data-t="question_placeholder">Research question will appear here.</p>
             </div>
             <div class="row">
               <span class="pill" id="projectStatusPill">status: draft</span>
-              <button id="reloadBtn">Reload state</button>
-              <button id="stopBtn">Stop project</button>
-              <button class="danger" id="deleteBtn">Delete project</button>
+              <button id="reloadBtn" data-t="reload_state">Reload state</button>
+              <button id="stopBtn" data-t="stop_project">Stop project</button>
+              <button class="danger" id="deleteBtn" data-t="delete_project">Delete project</button>
             </div>
           </div>
 
           <div class="flow-steps">
             <article class="step">
-              <strong>1. Start Research</strong>
-              <small>Generate first script and sync prompt to ElevenLabs.</small>
+              <strong data-t="step1_title">1. Start Research</strong>
+              <small data-t="step1_desc">Generate first script and sync prompt to ElevenLabs.</small>
               <label>
-                Agent ID (optional override)
+                <span data-t="agent_id_label">Agent ID (optional override)</span>
                 <input id="agentId" placeholder="agent_xxx" />
               </label>
               <div class="row">
-                <button class="primary" id="startBtn">Start research</button>
+                <button class="primary" id="startBtn" data-t="start_btn">Start research</button>
               </div>
             </article>
 
             <article class="step">
-              <strong>2. Interview Link</strong>
-              <small>Share this link or QR. After a call ends, evidence appears automatically.</small>
+              <strong data-t="step2_title">2. Interview Link</strong>
+              <small data-t="step2_desc">Share this link or QR. After a call ends, evidence appears automatically.</small>
               <div id="talkBlock" style="display:none;" class="talk-layout">
                 <div>
                   <div class="talk-link" id="talkLink"></div>
                   <div class="row" style="margin-top:8px;">
-                    <button id="openTalkBtn">Open interview link</button>
+                    <button id="openTalkBtn" data-t="open_link">Open interview link</button>
                   </div>
                 </div>
                 <img id="qrImg" class="qr" alt="Interview QR code" />
               </div>
-              <div class="muted" id="talkPlaceholder">Start project first to generate interview link and QR.</div>
+              <div class="muted" id="talkPlaceholder" data-t="talk_placeholder">Start project first to generate interview link and QR.</div>
             </article>
 
             <article class="step">
-              <strong>3. Finish</strong>
-              <small>Generate a report from ingested evidence.</small>
+              <strong data-t="step3_title">3. Finish</strong>
+              <small data-t="step3_desc">Generate a report from ingested evidence.</small>
               <div class="row">
-                <button class="warn" id="finishBtn">Finish & generate report</button>
+                <button class="warn" id="finishBtn" data-t="finish_btn">Finish & generate report</button>
               </div>
-              <div class="danger-box" id="ingestionHint">Waiting for first transcript via webhook.</div>
+              <div class="danger-box" id="ingestionHint" data-t="ingestion_waiting">Waiting for first transcript via webhook.</div>
             </article>
           </div>
 
@@ -591,15 +598,15 @@
         <section class="card">
           <div class="row" style="justify-content:space-between; align-items:flex-start;">
             <div>
-              <h2>Evidence Map</h2>
-              <p class="muted" style="margin-top:4px;" id="graphDescription">
+              <h2 data-t="evidence_map">Evidence Map</h2>
+              <p class="muted" style="margin-top:4px;" id="graphDescription" data-t="graph_description">
                 Hypothesis Map: hypotheses are blocks, evidence nodes attach as supports (green) or contradicts (red).
               </p>
             </div>
             <div class="row">
-              <button id="openFullscreenBtn">Open Fullscreen</button>
-              <button id="modeHypothesisBtn" class="active">Hypothesis Map</button>
-              <button id="modeNetworkBtn">Evidence Network</button>
+              <button id="openFullscreenBtn" data-t="open_fullscreen">Open Fullscreen</button>
+              <button id="modeHypothesisBtn" class="active" data-t="hypothesis_map">Hypothesis Map</button>
+              <button id="modeNetworkBtn" data-t="evidence_network">Evidence Network</button>
             </div>
           </div>
 
@@ -611,13 +618,13 @@
               <div class="legend" id="graphLegend"></div>
             </div>
             <aside class="graph-side">
-              <div class="graph-rule" id="graphSummary">No evidence yet.</div>
+              <div class="graph-rule" id="graphSummary" data-t="no_evidence">No evidence yet.</div>
               <div>
-                <h4>Selected Item</h4>
+                <h4 data-t="selected_item">Selected Item</h4>
                 <div class="mini-list" id="selectedEvidence"></div>
               </div>
               <div>
-                <h4>Research Progress</h4>
+                <h4 data-t="research_progress">Research Progress</h4>
                 <div class="mini-list" id="overlayList"></div>
               </div>
             </aside>
@@ -626,10 +633,10 @@
 
         <section class="card">
           <div class="row" style="justify-content:space-between; align-items:center;">
-            <h2>Report</h2>
+            <h2 data-t="report">Report</h2>
             <label style="display:flex; align-items:center; gap:6px; color:var(--ink); font-size:12px;">
               <input id="rawToggle" type="checkbox" style="width:auto;" />
-              Raw markdown
+              <span data-t="raw_markdown">Raw markdown</span>
             </label>
           </div>
           <div class="status" id="reportStatus" style="margin-top:8px;"></div>
@@ -639,6 +646,175 @@
     </div>
 
     <script>
+      const TRANSLATIONS = {
+        en: {
+          brand_description: "Create project, run interviews, review evidence map, generate report.",
+          create_project: "Create Project",
+          research_question: "Research question",
+          language_label: "Project language",
+          create_btn: "Create project",
+          projects: "Projects",
+          no_projects: "No projects yet",
+          no_projects_hint: "Create the first project from the panel above.",
+          select_or_create: "Select or create a project",
+          question_placeholder: "Research question will appear here.",
+          status_prefix: "status",
+          reload_state: "Reload state",
+          stop_project: "Stop project",
+          delete_project: "Delete project",
+          step1_title: "1. Start Research",
+          step1_desc: "Generate first script and sync prompt to ElevenLabs.",
+          agent_id_label: "Agent ID (optional override)",
+          start_btn: "Start research",
+          step2_title: "2. Interview Link",
+          step2_desc: "Share this link or QR. After a call ends, evidence appears automatically.",
+          open_link: "Open interview link",
+          talk_placeholder: "Start project first to generate interview link and QR.",
+          step3_title: "3. Finish",
+          step3_desc: "Generate a report from ingested evidence.",
+          finish_btn: "Finish & generate report",
+          ingestion_waiting: "Waiting for first transcript via webhook.",
+          evidence_map: "Evidence Map",
+          graph_description: "Hypothesis Map: hypotheses are blocks, evidence nodes attach as supports (green) or contradicts (red).",
+          open_fullscreen: "Open Fullscreen",
+          hypothesis_map: "Hypothesis Map",
+          evidence_network: "Evidence Network",
+          selected_item: "Selected Item",
+          research_progress: "Research Progress",
+          no_evidence: "No evidence yet.",
+          report: "Report",
+          raw_markdown: "Raw markdown",
+          interviews_suffix: "interview(s)",
+          evidence_suffix: "evidence",
+          convergence: "convergence",
+          novelty: "novelty",
+          participants: "Participants",
+          evidence_label: "Evidence",
+          active_hypotheses: "Active hypotheses",
+          new_hyp_latest: "New hypotheses (latest)",
+          total_hypotheses: "Total hypotheses",
+          convergence_label: "Convergence",
+          novelty_label: "Novelty",
+          no_report: "No report yet. Project status:",
+          report_generated: "Report generated:",
+          stale: "stale",
+          mode_label: "mode",
+          fallback_reason: "fallback reason",
+          ingestion_ok: "Webhook ingestion OK:",
+          ingestion_no_data: "No interview transcript ingested yet. Complete one call and wait for webhook delivery before finishing.",
+          safety_label: "prompt safety",
+          delete_confirm: "Delete project '{id}'? This cannot be undone.",
+          create_started: "Create project",
+          start_started: "Start research",
+          finish_started: "Finish and generate report",
+          stop_started: "Stop project",
+          delete_started: "Delete project",
+          reload_started: "Reload state",
+          project_stopped: "Project stopped. Agent is now free for another project.",
+          generating_report: "Generating report in background...",
+          loaded_project: "Loaded project",
+          question_required: "Research question is required.",
+          select_first: "Select or create a project first.",
+          no_data_finish: "Cannot finish yet: no ingested transcript/evidence.",
+        },
+        ru: {
+          brand_description: "Создайте проект, проведите интервью, изучите карту свидетельств, сгенерируйте отчёт.",
+          create_project: "Создать проект",
+          research_question: "Исследовательский вопрос",
+          language_label: "Язык проекта",
+          create_btn: "Создать проект",
+          projects: "Проекты",
+          no_projects: "Пока нет проектов",
+          no_projects_hint: "Создайте первый проект в панели выше.",
+          select_or_create: "Выберите или создайте проект",
+          question_placeholder: "Здесь появится исследовательский вопрос.",
+          status_prefix: "статус",
+          reload_state: "Обновить",
+          stop_project: "Остановить",
+          delete_project: "Удалить проект",
+          step1_title: "1. Начать исследование",
+          step1_desc: "Сгенерировать первый скрипт и синхронизировать промпт с ElevenLabs.",
+          agent_id_label: "Agent ID (опционально)",
+          start_btn: "Начать исследование",
+          step2_title: "2. Ссылка на интервью",
+          step2_desc: "Поделитесь этой ссылкой или QR. После звонка данные появятся автоматически.",
+          open_link: "Открыть ссылку",
+          talk_placeholder: "Сначала запустите проект для генерации ссылки и QR.",
+          step3_title: "3. Завершение",
+          step3_desc: "Сгенерировать отчёт по собранным данным.",
+          finish_btn: "Завершить и сгенерировать отчёт",
+          ingestion_waiting: "Ожидание первого транскрипта через webhook.",
+          evidence_map: "Карта свидетельств",
+          graph_description: "Карта гипотез: гипотезы — блоки, свидетельства — узлы (зелёный — поддержка, красный — противоречие).",
+          open_fullscreen: "Полный экран",
+          hypothesis_map: "Карта гипотез",
+          evidence_network: "Сеть свидетельств",
+          selected_item: "Выбранный элемент",
+          research_progress: "Прогресс исследования",
+          no_evidence: "Пока нет свидетельств.",
+          report: "Отчёт",
+          raw_markdown: "Исходный Markdown",
+          interviews_suffix: "интервью",
+          evidence_suffix: "свидетельств",
+          convergence: "конвергенция",
+          novelty: "новизна",
+          participants: "Участники",
+          evidence_label: "Свидетельства",
+          active_hypotheses: "Активные гипотезы",
+          new_hyp_latest: "Новые гипотезы (последнее)",
+          total_hypotheses: "Всего гипотез",
+          convergence_label: "Конвергенция",
+          novelty_label: "Новизна",
+          no_report: "Отчёт ещё не создан. Статус проекта:",
+          report_generated: "Отчёт сгенерирован:",
+          stale: "устарел",
+          mode_label: "режим",
+          fallback_reason: "причина fallback",
+          ingestion_ok: "Webhook OK:",
+          ingestion_no_data: "Транскрипт интервью ещё не получен. Проведите звонок и дождитесь webhook-доставки.",
+          safety_label: "безопасность промптов",
+          delete_confirm: "Удалить проект '{id}'? Это действие необратимо.",
+          create_started: "Создание проекта",
+          start_started: "Запуск исследования",
+          finish_started: "Завершение и генерация отчёта",
+          stop_started: "Остановка проекта",
+          delete_started: "Удаление проекта",
+          reload_started: "Обновление состояния",
+          project_stopped: "Проект остановлен. Агент свободен для другого проекта.",
+          generating_report: "Генерация отчёта в фоне...",
+          loaded_project: "Загружен проект",
+          question_required: "Исследовательский вопрос обязателен.",
+          select_first: "Сначала выберите или создайте проект.",
+          no_data_finish: "Невозможно завершить: нет полученных транскриптов/свидетельств.",
+        },
+      };
+
+      let currentUILang = localStorage.getItem("eidetic_ui_lang") || "en";
+
+      function T(key) {
+        return (TRANSLATIONS[currentUILang] || TRANSLATIONS.en)[key] || (TRANSLATIONS.en[key] || key);
+      }
+
+      function setUILanguage(lang) {
+        currentUILang = lang;
+        localStorage.setItem("eidetic_ui_lang", lang);
+        applyTranslations();
+      }
+
+      function applyTranslations() {
+        document.querySelectorAll("[data-t]").forEach((el) => {
+          const key = el.getAttribute("data-t");
+          if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+            // skip — these have values, not textContent
+          } else {
+            el.textContent = T(key);
+          }
+        });
+        document.querySelectorAll("[data-t-placeholder]").forEach((el) => {
+          el.placeholder = T(el.getAttribute("data-t-placeholder"));
+        });
+      }
+
       const state = {
         cards: [],
         selectedProjectId: null,
@@ -667,6 +843,7 @@
 
       const els = {
         researchQuestion: document.getElementById("researchQuestion"),
+        projectLanguage: document.getElementById("projectLanguage"),
         createProjectBtn: document.getElementById("createProjectBtn"),
         createStatus: document.getElementById("createStatus"),
         projectsList: document.getElementById("projectsList"),
@@ -821,7 +998,7 @@
         if (!state.cards.length) {
           const empty = document.createElement("div");
           empty.className = "project-item";
-          empty.innerHTML = '<div class="project-title">No projects yet</div><div class="project-meta">Create the first project from the panel above.</div>';
+          empty.innerHTML = `<div class="project-title">${escapeHtml(T("no_projects"))}</div><div class="project-meta">${escapeHtml(T("no_projects_hint"))}</div>`;
           els.projectsList.appendChild(empty);
           return;
         }
@@ -829,12 +1006,13 @@
         for (const card of state.cards) {
           const item = document.createElement("div");
           item.className = `project-item${card.id === state.selectedProjectId ? " active" : ""}`;
+          const langBadge = card.language === "ru" ? " [RU]" : "";
           item.innerHTML = `
-            <div class="project-title">${escapeHtml(card.id)}</div>
+            <div class="project-title">${escapeHtml(card.id)}${langBadge}</div>
             <div class="project-meta">
-              <div><strong style="color:${statusColor(card.status)};">${escapeHtml(card.status)}</strong>${card.report_stale ? " - stale report" : ""}</div>
-              <div>${card.interviews_count} interview(s), ${card.evidence_count} evidence</div>
-              <div>convergence ${toPct(card.convergence_score)} - novelty ${toPct(card.novelty_rate)}</div>
+              <div><strong style="color:${statusColor(card.status)};">${escapeHtml(card.status)}</strong>${card.report_stale ? ` - ${escapeHtml(T("stale"))}` : ""}</div>
+              <div>${card.interviews_count} ${escapeHtml(T("interviews_suffix"))}, ${card.evidence_count} ${escapeHtml(T("evidence_suffix"))}</div>
+              <div>${escapeHtml(T("convergence"))} ${toPct(card.convergence_score)} - ${escapeHtml(T("novelty"))} ${toPct(card.novelty_rate)}</div>
             </div>
           `;
           item.onclick = () => selectProject(card.id);
@@ -857,7 +1035,7 @@
           state.hypothesisMap = await api(`/api/projects/${encodeURIComponent(projectId)}/visualization/hypothesis-map`);
           renderProject(project);
           if (!silent) {
-            setStatus(els.controlStatus, `Loaded project ${project.id}`);
+            setStatus(els.controlStatus, `${T("loaded_project")} ${project.id}`);
           }
         } catch (error) {
           setStatus(els.controlStatus, error.message, true);
@@ -865,9 +1043,16 @@
       }
 
       function renderProject(project) {
+        const projectLang = project.language || "en";
+        if (projectLang !== currentUILang) {
+          setUILanguage(projectLang);
+        }
+
         els.projectTitle.textContent = project.id;
+        els.projectTitle.removeAttribute("data-t");
         els.projectQuestion.textContent = project.research_question || "";
-        els.projectStatusPill.textContent = `status: ${project.status}`;
+        els.projectQuestion.removeAttribute("data-t");
+        els.projectStatusPill.textContent = `${T("status_prefix")}: ${project.status}`;
         els.projectStatusPill.className = `pill ${statusClass(project.status)}`.trim();
         els.reloadBtn.disabled = false;
         els.openFullscreenBtn.disabled = false;
@@ -890,7 +1075,7 @@
           els.ingestionHint.style.borderColor = "var(--ok)";
           els.ingestionHint.style.background = "var(--ok-soft)";
           els.ingestionHint.style.color = "#0f7b53";
-          els.ingestionHint.textContent = `Webhook ingestion OK: ${interviewsCount} interview(s), ${evidenceCount} evidence item(s). prompt safety: ${project.prompt_safety_status || "ok"}.`;
+          els.ingestionHint.textContent = `${T("ingestion_ok")} ${interviewsCount} ${T("interviews_suffix")}, ${evidenceCount} ${T("evidence_suffix")}. ${T("safety_label")}: ${project.prompt_safety_status || "ok"}.`;
           els.finishBtn.disabled = false;
           return;
         }
@@ -898,7 +1083,7 @@
         els.ingestionHint.style.borderColor = "var(--danger)";
         els.ingestionHint.style.background = "var(--danger-soft)";
         els.ingestionHint.style.color = "#7f1d1d";
-        els.ingestionHint.textContent = "No interview transcript ingested yet. Complete one call and wait for webhook delivery before finishing.";
+        els.ingestionHint.textContent = T("ingestion_no_data");
         els.finishBtn.disabled = true;
       }
 
@@ -922,13 +1107,13 @@
         const activePropositions = (project.proposition_store || []).filter((p) => !["weak", "merged"].includes(p.status)).length;
         const progress = state.hypothesisMap?.progress_snapshot || {};
         const metrics = [
-          ["Participants", String((project.interview_store || []).length)],
-          ["Evidence", String((project.evidence_store || []).length)],
-          ["Active hypotheses", String(activePropositions)],
-          ["New hypotheses (latest)", String(progress.new_hypotheses_latest_interview || 0)],
-          ["Total hypotheses", String(progress.total_hypotheses || (project.proposition_store || []).length)],
-          ["Convergence", toPct(project.metrics?.convergence_score)],
-          ["Novelty", toPct(project.metrics?.novelty_rate)],
+          [T("participants"), String((project.interview_store || []).length)],
+          [T("evidence_label"), String((project.evidence_store || []).length)],
+          [T("active_hypotheses"), String(activePropositions)],
+          [T("new_hyp_latest"), String(progress.new_hypotheses_latest_interview || 0)],
+          [T("total_hypotheses"), String(progress.total_hypotheses || (project.proposition_store || []).length)],
+          [T("convergence_label"), toPct(project.metrics?.convergence_score)],
+          [T("novelty_label"), toPct(project.metrics?.novelty_rate)],
         ];
         els.metrics.innerHTML = metrics
           .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`)
@@ -1514,17 +1699,17 @@
 
       function renderReport(project) {
         if (!project.report_markdown) {
-          const staleText = project.report_stale ? " (stale)" : "";
-          setStatus(els.reportStatus, `No report yet. Project status: ${project.status}${staleText}`);
+          const staleText = project.report_stale ? ` (${T("stale")})` : "";
+          setStatus(els.reportStatus, `${T("no_report")} ${project.status}${staleText}`);
           els.reportView.innerHTML = "";
           return;
         }
 
         const generatedAt = project.report_generated_at || "unknown";
-        const staleText = project.report_stale ? " - stale" : "";
+        const staleText = project.report_stale ? ` - ${T("stale")}` : "";
         const mode = project.report_generation_mode || "unknown";
-        const reason = project.report_fallback_reason ? ` | fallback reason: ${project.report_fallback_reason}` : "";
-        setStatus(els.reportStatus, `Report generated: ${generatedAt}${staleText} | mode: ${mode}${reason}`);
+        const reason = project.report_fallback_reason ? ` | ${T("fallback_reason")}: ${project.report_fallback_reason}` : "";
+        setStatus(els.reportStatus, `${T("report_generated")} ${generatedAt}${staleText} | ${T("mode_label")}: ${mode}${reason}`);
 
         if (els.rawToggle.checked) {
           els.reportView.innerHTML = `<pre class="mono">${escapeHtml(project.report_markdown)}</pre>`;
@@ -1608,18 +1793,20 @@
       async function createProject() {
         const researchQuestion = els.researchQuestion.value.trim();
         if (!researchQuestion) {
-          setStatus(els.createStatus, "Research question is required.", true);
+          setStatus(els.createStatus, T("question_required"), true);
           return;
         }
+
+        const language = els.projectLanguage.value || "en";
 
         await runAction({
           button: els.createProjectBtn,
           statusEl: els.createStatus,
-          actionName: "Create project",
+          actionName: T("create_started"),
           fn: async () => {
             const result = await api("/api/projects", {
               method: "POST",
-              body: JSON.stringify({ research_question: researchQuestion }),
+              body: JSON.stringify({ research_question: researchQuestion, language }),
             });
             setStatus(els.createStatus, `Created ${result.project_id}`);
             await refreshCards({ silent: true });
@@ -1630,14 +1817,14 @@
 
       async function startResearch() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select or create a project first.", true);
+          setStatus(els.controlStatus, T("select_first"), true);
           return;
         }
 
         await runAction({
           button: els.startBtn,
           statusEl: els.controlStatus,
-          actionName: "Start research",
+          actionName: T("start_started"),
           fn: async () => {
             const agentId = els.agentId.value.trim();
             const payload = agentId ? { elevenlabs_agent_id: agentId } : {};
@@ -1647,7 +1834,7 @@
             });
             setStatus(
               els.controlStatus,
-              `Project started. prompt safety: ${result.prompt_safety_status || "ok"} (${result.prompt_safety_violations_count || 0}).`
+              `${T("start_started")} OK. ${T("safety_label")}: ${result.prompt_safety_status || "ok"} (${result.prompt_safety_violations_count || 0}).`
             );
             await loadProject(state.selectedProjectId, { silent: true });
             await refreshCards({ silent: true });
@@ -1658,23 +1845,23 @@
 
       async function finishResearch() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select or create a project first.", true);
+          setStatus(els.controlStatus, T("select_first"), true);
           return;
         }
 
         const project = state.selectedProject;
         if (!project || (project.interview_store || []).length === 0 || (project.evidence_store || []).length === 0) {
-          setStatus(els.controlStatus, "Cannot finish yet: no ingested transcript/evidence.", true);
+          setStatus(els.controlStatus, T("no_data_finish"), true);
           return;
         }
 
         await runAction({
           button: els.finishBtn,
           statusEl: els.controlStatus,
-          actionName: "Finish and generate report",
+          actionName: T("finish_started"),
           fn: async () => {
             await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/finish`, { method: "POST" });
-            setStatus(els.controlStatus, "Generating report in background...");
+            setStatus(els.controlStatus, T("generating_report"));
             await loadProject(state.selectedProjectId, { silent: true });
             await refreshCards({ silent: true });
           },
@@ -1683,18 +1870,18 @@
 
       async function stopProject() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select or create a project first.", true);
+          setStatus(els.controlStatus, T("select_first"), true);
           return;
         }
         await runAction({
           button: els.stopBtn,
           statusEl: els.controlStatus,
-          actionName: "Stop project",
+          actionName: T("stop_started"),
           fn: async () => {
             await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}/stop`, {
               method: "POST",
             });
-            setStatus(els.controlStatus, "Project stopped. Agent is now free for another project.");
+            setStatus(els.controlStatus, T("project_stopped"));
             await loadProject(state.selectedProjectId, { silent: true });
             await refreshCards({ silent: true });
           },
@@ -1703,16 +1890,16 @@
 
       async function deleteProject() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select or create a project first.", true);
+          setStatus(els.controlStatus, T("select_first"), true);
           return;
         }
-        const ok = window.confirm(`Delete project '${state.selectedProjectId}'? This cannot be undone.`);
+        const ok = window.confirm(T("delete_confirm").replace("{id}", state.selectedProjectId));
         if (!ok) return;
 
         await runAction({
           button: els.deleteBtn,
           statusEl: els.controlStatus,
-          actionName: "Delete project",
+          actionName: T("delete_started"),
           fn: async () => {
             await api(`/api/projects/${encodeURIComponent(state.selectedProjectId)}`, {
               method: "DELETE",
@@ -1724,13 +1911,13 @@
 
       async function reloadProjectState() {
         if (!state.selectedProjectId) {
-          setStatus(els.controlStatus, "Select or create a project first.", true);
+          setStatus(els.controlStatus, T("select_first"), true);
           return;
         }
         await runAction({
           button: els.reloadBtn,
           statusEl: els.controlStatus,
-          actionName: "Reload state",
+          actionName: T("reload_started"),
           fn: async () => {
             await loadProject(state.selectedProjectId, { silent: true });
             await refreshCards({ silent: true });
@@ -1769,11 +1956,19 @@
         if (state.selectedProject) renderReport(state.selectedProject);
       };
 
+      els.projectLanguage.onchange = () => {
+        setUILanguage(els.projectLanguage.value);
+      };
+
       async function boot() {
         els.reloadBtn.disabled = true;
         els.stopBtn.disabled = true;
         els.deleteBtn.disabled = true;
         els.openFullscreenBtn.disabled = true;
+
+        els.projectLanguage.value = currentUILang;
+        applyTranslations();
+
         await refreshCards({ silent: true });
 
         if (state.selectedProjectId) {

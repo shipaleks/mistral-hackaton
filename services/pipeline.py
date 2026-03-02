@@ -39,6 +39,7 @@ class Pipeline:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         project = self.project_service.load_project(project_id)
+        language = getattr(project, "language", "en") or "en"
 
         if conversation_id in project.processed_conversation_ids:
             return {"status": "duplicate", "conversation_id": conversation_id}
@@ -62,6 +63,7 @@ class Pipeline:
             existing_propositions=project.proposition_store,
             interview_id=interview.id,
             interview_index=len(project.interview_store),
+            language=language,
         )
         self._apply_analysis_result(project, result)
         await self.emit_analysis_events(project_id, result)
@@ -76,6 +78,7 @@ class Pipeline:
                     propositions=project.proposition_store,
                     metrics=project.metrics.model_dump(),
                     version=1,
+                    language=language,
                 )
             else:
                 new_script = await self.designer.update_script(
@@ -84,6 +87,7 @@ class Pipeline:
                     evidence=project.evidence_store,
                     previous_script=previous_script,
                     metrics=project.metrics.model_dump(),
+                    language=language,
                 )
         except Exception:
             fallback_version = 1 if previous_script is None else previous_script.version + 1
@@ -92,6 +96,7 @@ class Pipeline:
                 propositions=project.proposition_store,
                 metrics=project.metrics.model_dump(),
                 version=fallback_version,
+                language=language,
             )
             new_script.changes_summary = "Fallback script generated after designer failure"
 
@@ -99,6 +104,7 @@ class Pipeline:
             script=new_script,
             research_question=project.research_question,
             propositions=project.proposition_store,
+            language=language,
         )
         new_script = safety_result.script
         project.prompt_safety_status = safety_result.status
@@ -115,7 +121,7 @@ class Pipeline:
         project.sync_pending = False
         project.sync_pending_script_version = None
         if project.elevenlabs_agent_id:
-            full_prompt = self.designer.build_interviewer_prompt(new_script)
+            full_prompt = self.designer.build_interviewer_prompt(new_script, language=language)
             try:
                 await self.elevenlabs.update_agent_prompt(project.elevenlabs_agent_id, full_prompt)
                 project.last_prompt_update_at = datetime.now(timezone.utc)
