@@ -59,6 +59,14 @@ _STOPWORDS = {
     "an",
     "of",
     "to",
+    # Russian stopwords
+    "это", "как", "что", "для", "при", "они", "она", "его",
+    "мне", "мой", "мои", "все", "или", "уже", "так", "тоже",
+    "вот", "где", "там", "тут", "ещё", "был", "была", "были",
+    "быть", "очень", "когда", "если", "чтобы", "этот", "эта",
+    "эти", "тот", "того", "между", "через", "после", "перед",
+    "более", "менее", "также", "только", "можно", "нужно",
+    "надо", "потому", "самый", "самая", "самое",
 }
 
 
@@ -280,10 +288,16 @@ def build_hypothesis_map(project: ProjectState) -> dict[str, Any]:
             }
         )
 
+    project_language = getattr(project, "language", "en") or "en"
     for evidence in project.evidence_store:
-        display_quote = str(evidence.quote_english or "").strip()
-        if not display_quote:
-            display_quote = "Translation pending"
+        if project_language == "ru":
+            display_quote = str(evidence.quote or "").strip()
+            if not display_quote:
+                display_quote = "Перевод ожидается"
+        else:
+            display_quote = str(evidence.quote_english or "").strip()
+            if not display_quote:
+                display_quote = "Translation pending"
 
         nodes.append(
             {

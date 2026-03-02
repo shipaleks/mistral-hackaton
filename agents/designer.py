@@ -24,12 +24,30 @@ class DesignerAgent:
     def __init__(self, llm: LLMClient, max_sections: int = 8):
         self.llm = llm
         self.max_sections = max_sections
-        self.system_prompt = load_prompt("designer_system.txt")
-        self.interviewer_base_prompt = load_prompt("interviewer_base.txt")
+        self._system_prompts: dict[str, str] = {}
+        self._interviewer_prompts: dict[str, str] = {}
+
+    def _get_system_prompt(self, language: str = "en") -> str:
+        if language not in self._system_prompts:
+            self._system_prompts[language] = load_prompt(
+                "designer_system.txt", language=language
+            )
+        return self._system_prompts[language]
+
+    def _get_interviewer_base_prompt(self, language: str = "en") -> str:
+        if language not in self._interviewer_prompts:
+            self._interviewer_prompts[language] = load_prompt(
+                "interviewer_base.txt", language=language
+            )
+        return self._interviewer_prompts[language]
 
     async def generate_initial_script(
-        self, research_question: str, initial_angles: list[str] | None = None
+        self,
+        research_question: str,
+        initial_angles: list[str] | None = None,
+        language: str = "en",
     ) -> tuple[list[Proposition], InterviewScript]:
+        system_prompt = self._get_system_prompt(language)
         payload = {
             "task": "Generate initial propositions and first interview script",
             "research_question": research_question,
@@ -38,7 +56,7 @@ class DesignerAgent:
         }
         raw = await self.llm.chat_json(
             messages=[
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ],
             temperature=0.7,
@@ -49,6 +67,7 @@ class DesignerAgent:
             raw.get("script") if isinstance(raw.get("script"), dict) else raw,
             research_question,
             version=1,
+            language=language,
         )
         return propositions, script
 
@@ -59,7 +78,9 @@ class DesignerAgent:
         evidence: list,
         previous_script: InterviewScript,
         metrics: dict[str, Any],
+        language: str = "en",
     ) -> InterviewScript:
+        system_prompt = self._get_system_prompt(language)
         evidence_briefing = self._build_evidence_briefing(propositions=propositions, evidence=evidence)
         payload = {
             "task": "Update interview script based on current state",
@@ -72,7 +93,7 @@ class DesignerAgent:
         }
         raw = await self.llm.chat_json(
             messages=[
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ],
             temperature=0.7,
@@ -84,6 +105,7 @@ class DesignerAgent:
             raw.get("script") if isinstance(raw.get("script"), dict) else raw,
             research_question,
             version=version,
+            language=language,
         )
 
     async def generate_minimal_script(
@@ -92,15 +114,33 @@ class DesignerAgent:
         propositions: list[Proposition],
         metrics: dict[str, Any],
         version: int,
+        language: str = "en",
     ) -> InterviewScript:
+        if language == "ru":
+            main_q_tpl = "Расскажите подробнее о {}?"
+            probes = ["Можете привести конкретный пример?", "Что произошло дальше?"]
+            context = "Минимальная секция сценария"
+            opening = "Расскажите о вашем опыте в целом?"
+            closing = "Что вас больше всего удивило в этом опыте?"
+            wildcard = "Есть ли что-то важное, о чём я не спросил(а)?"
+            summary = "Сгенерирован минимальный сценарий"
+        else:
+            main_q_tpl = "Could you tell me more about {}?"
+            probes = ["Can you give a concrete example?", "What happened next?"]
+            context = "MVP fallback section"
+            opening = "Could you share your overall experience so far?"
+            closing = "What surprised you most about this experience?"
+            wildcard = "Is there anything important I have not asked about?"
+            summary = "MVP fallback script generated"
+
         sections = [
             ScriptSection(
                 proposition_id=p.id,
                 priority="high" if idx == 0 else "medium",
                 instruction="EXPLORE",
-                main_question=f"Could you tell me more about {p.factor.lower()}?",
-                probes=["Can you give a concrete example?", "What happened next?"],
-                context="MVP fallback section",
+                main_question=main_q_tpl.format(p.factor.lower()),
+                probes=list(probes),
+                context=context,
             )
             for idx, p in enumerate(propositions[: self.max_sections])
         ]
@@ -108,17 +148,17 @@ class DesignerAgent:
         return InterviewScript(
             version=version,
             research_question=research_question,
-            opening_question="Could you share your overall experience so far?",
+            opening_question=opening,
             sections=sections,
-            closing_question="What surprised you most about this experience?",
-            wildcard="Is there anything important I have not asked about?",
+            closing_question=closing,
+            wildcard=wildcard,
             mode=metrics.get("mode", "divergent"),
             convergence_score=float(metrics.get("convergence_score", 0.0)),
             novelty_rate=float(metrics.get("novelty_rate", 1.0)),
-            changes_summary="MVP fallback script generated",
+            changes_summary=summary,
         )
 
-    def build_interviewer_prompt(self, script: InterviewScript) -> str:
+    def build_interviewer_prompt(self, script: InterviewScript, language: str = "en") -> str:
         topic_blocks = []
         probe_lines = []
         for section in script.sections[: self.max_sections]:
@@ -136,7 +176,7 @@ class DesignerAgent:
                 f"- {section.proposition_id}: {section.instruction} ({section.priority})"
             )
 
-        rendered = self.interviewer_base_prompt
+        rendered = self._get_interviewer_base_prompt(language)
         rendered = rendered.replace("{opening_question}", script.opening_question)
         rendered = rendered.replace(
             "{propositions_and_questions}", "\n\n".join(topic_blocks) if topic_blocks else "No active topics"
@@ -230,6 +270,7 @@ class DesignerAgent:
         payload: dict[str, Any],
         research_question: str,
         version: int,
+        language: str = "en",
     ) -> InterviewScript:
         sections: list[ScriptSection] = []
         for item in payload.get("sections", []):
@@ -242,7 +283,8 @@ class DesignerAgent:
             instruction = str(item.get("instruction", "EXPLORE")).upper()
             if instruction not in {"EXPLORE", "VERIFY", "CHALLENGE", "SATURATED"}:
                 instruction = "EXPLORE"
-            main_question = str(item.get("main_question", "Could you tell me more?")).strip()
+            default_question = "Можете рассказать подробнее?" if language == "ru" else "Could you tell me more?"
+            main_question = str(item.get("main_question", default_question)).strip()
             probes = item.get("probes", [])
             if not isinstance(probes, list):
                 probes = []
@@ -257,22 +299,30 @@ class DesignerAgent:
                 )
             )
 
+        if language == "ru":
+            default_opening = "Расскажите о вашем опыте, связанном с данным исследовательским вопросом?"
+            default_closing = "Что вас больше всего удивило в этом опыте?"
+            default_wildcard = "Есть ли что-то важное, о чём я не спросил(а)?"
+            default_summary = "Сценарий обновлён"
+        else:
+            default_opening = "Could you share your experience related to this research question so far?"
+            default_closing = "What surprised you most about this experience?"
+            default_wildcard = "Is there anything important I have not asked about?"
+            default_summary = "Script updated"
+
         return InterviewScript(
             version=version,
             generated_after_interview=payload.get("generated_after_interview"),
             research_question=research_question,
             opening_question=str(
-                payload.get(
-                    "opening_question",
-                    "Could you share your experience related to this research question so far?",
-                )
+                payload.get("opening_question", default_opening)
             ),
             sections=sections[: self.max_sections],
             closing_question=str(
-                payload.get("closing_question", "What surprised you most about this experience?")
+                payload.get("closing_question", default_closing)
             ),
             wildcard=str(
-                payload.get("wildcard", "Is there anything important I have not asked about?")
+                payload.get("wildcard", default_wildcard)
             ),
             mode=(
                 str(payload.get("mode", "divergent")).lower()
@@ -281,5 +331,5 @@ class DesignerAgent:
             ),
             convergence_score=float(payload.get("convergence_score", 0.0)),
             novelty_rate=float(payload.get("novelty_rate", 1.0)),
-            changes_summary=str(payload.get("changes_summary", "Script updated")),
+            changes_summary=str(payload.get("changes_summary", default_summary)),
         )

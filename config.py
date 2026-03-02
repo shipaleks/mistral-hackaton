@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SUPPORTED_LANGUAGES = {"en", "ru"}
+
 
 def _env_float(name: str, default: float) -> float:
     value = os.getenv(name)
@@ -36,6 +38,7 @@ class Settings:
     app_base_url: str
     data_dir: Path
     default_project_id: str
+    default_language: str
 
     mistral_api_key: str
     mistral_api_base: str
@@ -73,6 +76,7 @@ def get_settings() -> Settings:
         app_base_url=os.getenv("APP_BASE_URL", "http://localhost:8000"),
         data_dir=Path(os.getenv("DATA_DIR", "./data/projects")),
         default_project_id=os.getenv("DEFAULT_PROJECT_ID", "hackathon-demo"),
+        default_language=os.getenv("DEFAULT_LANGUAGE", "en"),
         mistral_api_key=os.getenv("MISTRAL_API_KEY", ""),
         mistral_api_base=os.getenv("MISTRAL_API_BASE", "https://api.mistral.ai/v1"),
         mistral_model=mistral_model,

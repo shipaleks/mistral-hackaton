@@ -35,6 +35,7 @@ class ProjectState(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     initial_angles: list[str] = Field(default_factory=list)
+    language: str = "en"
     elevenlabs_agent_id: str | None = None
 
     status: ProjectStatus = "draft"

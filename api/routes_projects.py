@@ -22,7 +22,7 @@ from api.deps import (
     get_sse_manager,
     get_synthesizer_agent,
 )
-from config import Settings
+from config import SUPPORTED_LANGUAGES, Settings
 from models.project import ProjectState
 from models.proposition import Proposition
 from models.script import ScriptSection
@@ -47,6 +47,7 @@ class ProjectCreateRequest(BaseModel):
     id: str | None = None
     research_question: str = Field(min_length=1)
     initial_angles: list[str] = Field(default_factory=list)
+    language: str = "en"
 
 
 class StartProjectRequest(BaseModel):
@@ -77,7 +78,7 @@ class ProjectReportResponse(BaseModel):
 
 
 def _slugify(text: str) -> str:
-    value = re.sub(r"[^a-zA-Z0-9\s-]", "", text).strip().lower()
+    value = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9\s-]", "", text).strip().lower()
     value = re.sub(r"\s+", "-", value)
     value = re.sub(r"-+", "-", value)
     return value[:40] or "research"
@@ -188,6 +189,13 @@ def create_project(
     payload: ProjectCreateRequest,
     project_service: ProjectService = Depends(get_project_service),
 ) -> dict[str, str]:
+    language = payload.language or "en"
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language '{language}'. Supported: {sorted(SUPPORTED_LANGUAGES)}",
+        )
+
     requested_id = payload.id.strip() if isinstance(payload.id, str) else ""
     project_id = requested_id or _generate_project_id(payload.research_question)
 
@@ -199,11 +207,12 @@ def create_project(
             project_id=project_id,
             research_question=payload.research_question,
             initial_angles=payload.initial_angles,
+            language=language,
         )
     except ProjectAlreadyExistsError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
 
-    return {"project_id": project.id, "status": "created"}
+    return {"project_id": project.id, "status": "created", "language": language}
 
 
 @router.get("", status_code=status.HTTP_200_OK)
@@ -305,27 +314,43 @@ async def start_project(
     except ProjectNotFoundError as err:
         raise HTTPException(status_code=404, detail=str(err)) from err
 
+    language = getattr(project, "language", "en") or "en"
+
     try:
         propositions, script = await designer.generate_initial_script(
             research_question=project.research_question,
             initial_angles=project.initial_angles,
+            language=language,
         )
     except Exception:
-        propositions = [
-            Proposition(
-                id="P001",
-                factor="Overall respondent experience",
-                mechanism="Personal perception of key constraints and enablers",
-                outcome="Positive or negative sentiment related to the research question",
-                confidence=0.0,
-                status="untested",
-            )
-        ]
+        if language == "ru":
+            propositions = [
+                Proposition(
+                    id="P001",
+                    factor="Общий опыт респондента",
+                    mechanism="Личное восприятие ключевых ограничений и возможностей",
+                    outcome="Позитивное или негативное отношение к исследовательскому вопросу",
+                    confidence=0.0,
+                    status="untested",
+                )
+            ]
+        else:
+            propositions = [
+                Proposition(
+                    id="P001",
+                    factor="Overall respondent experience",
+                    mechanism="Personal perception of key constraints and enablers",
+                    outcome="Positive or negative sentiment related to the research question",
+                    confidence=0.0,
+                    status="untested",
+                )
+            ]
         script = await designer.generate_minimal_script(
             research_question=project.research_question,
             propositions=propositions,
             metrics=project.metrics.model_dump(),
             version=1,
+            language=language,
         )
 
     proposition_ids = set()
@@ -344,16 +369,28 @@ async def start_project(
 
     project.proposition_store = fixed
     if not project.proposition_store:
-        project.proposition_store = [
-            Proposition(
-                id=project_service.next_proposition_id(project),
-                factor="Overall respondent experience",
-                mechanism="Personal perception of key constraints and enablers",
-                outcome="Positive or negative sentiment related to the research question",
-                confidence=0.0,
-                status="untested",
-            )
-        ]
+        if language == "ru":
+            project.proposition_store = [
+                Proposition(
+                    id=project_service.next_proposition_id(project),
+                    factor="Общий опыт респондента",
+                    mechanism="Личное восприятие ключевых ограничений и возможностей",
+                    outcome="Позитивное или негативное отношение к исследовательскому вопросу",
+                    confidence=0.0,
+                    status="untested",
+                )
+            ]
+        else:
+            project.proposition_store = [
+                Proposition(
+                    id=project_service.next_proposition_id(project),
+                    factor="Overall respondent experience",
+                    mechanism="Personal perception of key constraints and enablers",
+                    outcome="Positive or negative sentiment related to the research question",
+                    confidence=0.0,
+                    status="untested",
+                )
+            ]
 
     project.metrics.mode = script.mode
     project.metrics.convergence_score = script.convergence_score
@@ -362,16 +399,28 @@ async def start_project(
     if not script.sections and project.proposition_store:
         script.sections = []
         for prop in project.proposition_store[: settings.max_propositions_in_script]:
-            script.sections.append(
-                ScriptSection(
-                    proposition_id=prop.id,
-                    priority="high",
-                    instruction="EXPLORE",
-                    main_question=f"Could you tell me more about {prop.factor.lower()}?",
-                    probes=["Can you give an example?", "What happened next?"],
-                    context="Bootstrap section",
+            if language == "ru":
+                script.sections.append(
+                    ScriptSection(
+                        proposition_id=prop.id,
+                        priority="high",
+                        instruction="EXPLORE",
+                        main_question=f"Расскажите подробнее о {prop.factor.lower()}?",
+                        probes=["Можете привести конкретный пример?", "Что произошло дальше?"],
+                        context="Начальная секция",
+                    )
                 )
-            )
+            else:
+                script.sections.append(
+                    ScriptSection(
+                        proposition_id=prop.id,
+                        priority="high",
+                        instruction="EXPLORE",
+                        main_question=f"Could you tell me more about {prop.factor.lower()}?",
+                        probes=["Can you give an example?", "What happened next?"],
+                        context="Bootstrap section",
+                    )
+                )
 
     agent_id = payload.elevenlabs_agent_id or project.elevenlabs_agent_id or settings.elevenlabs_agent_id
     if agent_id:
@@ -391,6 +440,7 @@ async def start_project(
         script=script,
         research_question=project.research_question,
         propositions=project.proposition_store,
+        language=language,
     )
     script = safety_result.script
     project.prompt_safety_status = safety_result.status
@@ -409,7 +459,7 @@ async def start_project(
     project.status = "running"
 
     if project.elevenlabs_agent_id:
-        prompt = designer.build_interviewer_prompt(script)
+        prompt = designer.build_interviewer_prompt(script, language=language)
         try:
             await elevenlabs.update_agent_prompt(project.elevenlabs_agent_id, prompt)
             project.last_prompt_update_at = datetime.now(timezone.utc)
@@ -458,6 +508,7 @@ async def start_project(
     response = {
         "project_id": project.id,
         "status": "started",
+        "language": language,
         "script_version": script.version,
         "propositions": len(project.proposition_store),
         "sync_pending": project.sync_pending,
