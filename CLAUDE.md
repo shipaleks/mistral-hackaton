@@ -134,6 +134,42 @@ Three routers mounted in `main.py` under `/api`:
 - `api/routes_webhook.py` — ElevenLabs post-call webhook receiver (async: returns 200 immediately, processes via BackgroundTasks)
 - `api/routes_stream.py` — SSE event stream per project
 
+## Deployment (Koyeb)
+
+App: `working-sheryl`, service: `mistral-hackaton`.
+Production URL: `https://working-sheryl-grounded-7ef2e4c4.koyeb.app`
+
+### Koyeb CLI Commands
+
+```bash
+# Check service status and deployment history
+koyeb service describe working-sheryl/mistral-hackaton
+
+# View runtime logs (stdout/stderr from the app)
+koyeb service logs working-sheryl/mistral-hackaton --type runtime
+
+# View build logs (pip install, buildpack output)
+koyeb service logs working-sheryl/mistral-hackaton --type build
+
+# Filter logs (pipe to grep)
+koyeb service logs working-sheryl/mistral-hackaton --type runtime | grep -i "POST\|error\|webhook"
+
+# Redeploy (pulls latest commit from GitHub)
+koyeb service redeploy working-sheryl/mistral-hackaton
+
+# Exec into running instance
+koyeb service exec working-sheryl/mistral-hackaton -- sh
+
+# List instances
+koyeb instance list
+```
+
+### Troubleshooting
+
+- **Webhook disabled by ElevenLabs**: If "Auto disabled due to repeated failures" appears in ElevenLabs → Developers → Webhooks, re-enable manually. The webhook must return HTTP 200 within ~30s (our code returns instantly via BackgroundTasks).
+- **Data lost after redeploy**: Koyeb uses ephemeral filesystem. All project data in `data/` is wiped on each deploy. Use `scripts/import_transcripts.py` to re-import from saved transcripts.
+- **Deployment ERROR "Failed to get SHA"**: Usually a transient GitHub connectivity issue. Retry with `koyeb service redeploy`.
+
 ## Training Pipeline (Optional)
 
 `training/` contains a fine-tuning pipeline for Mistral models: transcribe → normalize speakers → extract examples → anonymize → format JSONL → launch fine-tune job. Each step has corresponding tests in `tests/test_training_*.py`.
