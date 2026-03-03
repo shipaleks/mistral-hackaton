@@ -113,7 +113,7 @@ SSE streaming via `services/sse_manager.py` → consumed by React dashboard (`da
 
 ### Prompt Files
 
-System prompts are plain text in `prompts/` directory, loaded at runtime by `agents/prompt_loader.py`. The interviewer prompt uses `{placeholder}` template substitution for dynamic content.
+System prompts are plain text in `prompts/` directory with per-language variants in `prompts/en/` and `prompts/ru/`, loaded at runtime by `agents/prompt_loader.py`. The interviewer prompt uses `{placeholder}` template substitution for dynamic content. Prompts are cached per-language in agent instances (`_system_prompts`, `_interviewer_prompts` dicts) — restart the server to pick up prompt file changes.
 
 ## Code Conventions
 
@@ -121,7 +121,7 @@ System prompts are plain text in `prompts/` directory, loaded at runtime by `age
 - Config is a frozen dataclass (`config.py:Settings`) loaded once via `@lru_cache`. Per-agent model overrides: `DESIGNER_MODEL`, `ANALYST_MODEL`, `SYNTHESIZER_MODEL` env vars fall back to `MISTRAL_MODEL`.
 - Tests mock `LLMClient.chat_json` / `LLMClient.chat` to avoid real API calls. See existing tests for patterns.
 - Fake designer mocks must accept `language` parameter: `build_interviewer_prompt(self, script, language="en")`.
-- Logging uses `logging.getLogger(__name__)` — no print statements. Key modules with logging: `api/routes_webhook.py`, `services/pipeline.py`, `services/elevenlabs_service.py`.
+- Logging uses `logging.getLogger(__name__)` — no print statements. `logging.basicConfig()` is configured in `main.py` at module level (INFO level, timestamped format). Key modules with logging: `api/routes_webhook.py`, `services/pipeline.py`, `services/elevenlabs_service.py`.
 
 ## Environment Variables
 
@@ -164,11 +164,36 @@ koyeb service exec working-sheryl/mistral-hackaton -- sh
 koyeb instance list
 ```
 
+### ElevenLabs Agent Configuration
+
+The ElevenLabs conversational agent uses Mistral as a custom LLM (`custom-llm` mode). Key settings managed via ElevenLabs API:
+- `custom_llm.url`: `https://api.mistral.ai/v1`
+- `custom_llm.model_id`: `mistral-large-latest`
+- `custom_llm.api_key`: stored as ElevenLabs secret (not in our repo)
+- `max_tokens`: must be a positive integer (e.g., 1000). `-1` causes Mistral API errors.
+- `reasoning_effort`: must be `null`. Setting it to any value (e.g., `"none"`) causes `custom_llm_error` because ElevenLabs passes it to Mistral, which doesn't support it.
+- `temperature`: `0.0`
+
+To inspect/update agent config via API:
+```bash
+# Get agent config
+curl -s "https://api.elevenlabs.io/v1/convai/agents/$ELEVENLABS_AGENT_ID" \
+  -H "xi-api-key: $ELEVENLABS_API_KEY" | python3 -m json.tool
+
+# Patch agent config (example: fix max_tokens and reasoning_effort)
+curl -X PATCH "https://api.elevenlabs.io/v1/convai/agents/$ELEVENLABS_AGENT_ID" \
+  -H "xi-api-key: $ELEVENLABS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"conversation_config":{"agent":{"prompt":{"max_tokens":1000,"reasoning_effort":null}}}}'
+```
+
 ### Troubleshooting
 
+- **`custom_llm_error: Failed to generate response from custom LLM`**: Check ElevenLabs agent config — `reasoning_effort` must be `null` (not `"none"`), `max_tokens` must be a positive integer (not `-1`). Use the PATCH commands above to fix. Also verify the Mistral API key secret is valid.
 - **Webhook disabled by ElevenLabs**: If "Auto disabled due to repeated failures" appears in ElevenLabs → Developers → Webhooks, re-enable manually. The webhook must return HTTP 200 within ~30s (our code returns instantly via BackgroundTasks).
 - **Data lost after redeploy**: Koyeb uses ephemeral filesystem. All project data in `data/` is wiped on each deploy. Use `scripts/import_transcripts.py` to re-import from saved transcripts.
 - **Deployment ERROR "Failed to get SHA"**: Usually a transient GitHub connectivity issue. Retry with `koyeb service redeploy`.
+- **No pipeline logs visible**: Ensure `logging.basicConfig()` is in `main.py`. Without it, `getLogger(__name__)` defaults to WARNING level and INFO messages are silently dropped.
 
 ## Training Pipeline (Optional)
 
