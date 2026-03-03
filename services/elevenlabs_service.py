@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ElevenLabsService:
@@ -61,13 +64,18 @@ class ElevenLabsService:
                     )
 
                 response.raise_for_status()
+                logger.info("ElevenLabs agent %s prompt updated successfully", agent_id)
                 return
             except (httpx.RequestError, httpx.HTTPStatusError) as err:
                 last_error = err
+                logger.warning("ElevenLabs API attempt %d/%d failed for agent %s: %s",
+                               attempt, self.max_retries, agent_id, err)
                 if attempt >= self.max_retries:
                     break
                 await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
 
+        logger.error("Failed to update ElevenLabs prompt for agent %s after %d attempts",
+                      agent_id, self.max_retries)
         raise RuntimeError("Failed to update ElevenLabs prompt") from last_error
 
     @staticmethod

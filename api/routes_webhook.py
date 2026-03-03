@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
 from api.deps import get_pipeline, get_project_service, get_settings
 from config import Settings
@@ -11,6 +12,7 @@ from services.pipeline import Pipeline
 from services.project_service import ProjectService
 from services.webhook_security import verify_elevenlabs_signature
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -154,9 +156,32 @@ def _extract_conversation_payload(payload: dict[str, Any]) -> tuple[str, str, di
     return conversation_id, transcript, metadata
 
 
+async def _process_interview_safe(
+    pipeline: Pipeline,
+    project_id: str,
+    transcript: str,
+    conversation_id: str,
+    metadata: dict[str, Any],
+) -> None:
+    try:
+        await pipeline.process_interview(
+            project_id=project_id,
+            transcript=transcript,
+            conversation_id=conversation_id,
+            metadata=metadata,
+        )
+        logger.info("Processed interview %s for project %s", conversation_id, project_id)
+    except Exception:
+        logger.exception(
+            "Failed to process interview %s for project %s",
+            conversation_id, project_id,
+        )
+
+
 @router.post("/elevenlabs", status_code=status.HTTP_200_OK)
 async def elevenlabs_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
     project_service: ProjectService = Depends(get_project_service),
     pipeline: Pipeline = Depends(get_pipeline),
@@ -208,9 +233,18 @@ async def elevenlabs_webhook(
     if not project_id:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
 
-    return await pipeline.process_interview(
-        project_id=project_id,
-        transcript=transcript,
-        conversation_id=conversation_id,
-        metadata=metadata,
+    # Check for duplicates before scheduling background work
+    project = project_service.load_project(project_id)
+    if conversation_id in project.processed_conversation_ids:
+        logger.info("Duplicate conversation %s for project %s, skipping", conversation_id, project_id)
+        return {"status": "duplicate", "conversation_id": conversation_id}
+
+    logger.info("Webhook received: conversation %s for project %s", conversation_id, project_id)
+
+    # Schedule pipeline processing in background — return 200 immediately
+    background_tasks.add_task(
+        _process_interview_safe,
+        pipeline, project_id, transcript, conversation_id, metadata,
     )
+
+    return {"status": "accepted", "conversation_id": conversation_id}

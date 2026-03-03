@@ -85,7 +85,7 @@ class SimpleDesigner:
             changes_summary="Init",
         )
 
-    def build_interviewer_prompt(self, script):
+    def build_interviewer_prompt(self, script, language="en"):
         return f"PROMPT {script.version}"
 
     async def generate_initial_script(self, *args, **kwargs):

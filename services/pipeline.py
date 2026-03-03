@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,8 @@ from services.project_service import ProjectService
 from services.script_safety import ScriptSafetyGuard
 from services.sse_manager import SSEManager
 from services.visualization import apply_heuristic_links
+
+logger = logging.getLogger(__name__)
 
 
 class Pipeline:
@@ -56,68 +59,91 @@ class Pipeline:
             metadata=metadata or {},
         )
         self.project_service.add_interview(project, interview)
+        logger.info("Interview %s saved for project %s", interview.id, project_id)
 
-        result = await self.analyst.analyze_interview(
-            transcript=transcript,
-            existing_evidence=project.evidence_store,
-            existing_propositions=project.proposition_store,
-            interview_id=interview.id,
-            interview_index=len(project.interview_store),
-            language=language,
-        )
-        self._apply_analysis_result(project, result)
-        await self.emit_analysis_events(project_id, result)
+        # --- Analysis phase ---
+        try:
+            result = await self.analyst.analyze_interview(
+                transcript=transcript,
+                existing_evidence=project.evidence_store,
+                existing_propositions=project.proposition_store,
+                interview_id=interview.id,
+                interview_index=len(project.interview_store),
+                language=language,
+            )
+            self._apply_analysis_result(project, result)
+            await self.emit_analysis_events(project_id, result)
+            logger.info("Analysis complete for %s: %d evidence, %d propositions",
+                        conversation_id, len(result.new_evidence), len(result.new_propositions))
+        except Exception:
+            logger.exception("Analysis failed for interview %s in project %s", conversation_id, project_id)
+            project.processed_conversation_ids.append(conversation_id)
+            self.project_service.save_project(project)
+            raise
 
         heuristic_changed, heuristic_added = apply_heuristic_links(project)
 
-        previous_script = project.current_script
+        # --- Script generation phase ---
+        new_script = None
+        safety_result = None
         try:
-            if previous_script is None:
+            previous_script = project.current_script
+            try:
+                if previous_script is None:
+                    new_script = await self.designer.generate_minimal_script(
+                        research_question=project.research_question,
+                        propositions=project.proposition_store,
+                        metrics=project.metrics.model_dump(),
+                        version=1,
+                        language=language,
+                    )
+                else:
+                    new_script = await self.designer.update_script(
+                        research_question=project.research_question,
+                        propositions=project.proposition_store,
+                        evidence=project.evidence_store,
+                        previous_script=previous_script,
+                        metrics=project.metrics.model_dump(),
+                        language=language,
+                    )
+            except Exception:
+                logger.warning("Designer failed for %s, generating fallback script", conversation_id)
+                fallback_version = 1 if previous_script is None else previous_script.version + 1
                 new_script = await self.designer.generate_minimal_script(
                     research_question=project.research_question,
                     propositions=project.proposition_store,
                     metrics=project.metrics.model_dump(),
-                    version=1,
+                    version=fallback_version,
                     language=language,
                 )
-            else:
-                new_script = await self.designer.update_script(
-                    research_question=project.research_question,
-                    propositions=project.proposition_store,
-                    evidence=project.evidence_store,
-                    previous_script=previous_script,
-                    metrics=project.metrics.model_dump(),
-                    language=language,
-                )
-        except Exception:
-            fallback_version = 1 if previous_script is None else previous_script.version + 1
-            new_script = await self.designer.generate_minimal_script(
+                new_script.changes_summary = "Fallback script generated after designer failure"
+
+            safety_result = self.script_safety.enforce(
+                script=new_script,
                 research_question=project.research_question,
                 propositions=project.proposition_store,
-                metrics=project.metrics.model_dump(),
-                version=fallback_version,
                 language=language,
             )
-            new_script.changes_summary = "Fallback script generated after designer failure"
+            new_script = safety_result.script
+            project.prompt_safety_status = safety_result.status
+            project.prompt_safety_violations_count = safety_result.violations_count
 
-        safety_result = self.script_safety.enforce(
-            script=new_script,
-            research_question=project.research_question,
-            propositions=project.proposition_store,
-            language=language,
-        )
-        new_script = safety_result.script
-        project.prompt_safety_status = safety_result.status
-        project.prompt_safety_violations_count = safety_result.violations_count
+            if safety_result.status in {"sanitized", "fallback"}:
+                marker = f"safety_guard={safety_result.status} violations={safety_result.violations_count}"
+                if marker not in new_script.changes_summary:
+                    summary = new_script.changes_summary.strip() or "Script updated"
+                    new_script.changes_summary = f"{summary} [{marker}]"
 
-        if safety_result.status in {"sanitized", "fallback"}:
-            marker = f"safety_guard={safety_result.status} violations={safety_result.violations_count}"
-            if marker not in new_script.changes_summary:
-                summary = new_script.changes_summary.strip() or "Script updated"
-                new_script.changes_summary = f"{summary} [{marker}]"
+            self.project_service.add_script(project, new_script)
+            logger.info("Script v%d generated for project %s", new_script.version, project_id)
+        except Exception:
+            logger.exception("Script generation failed for interview %s in project %s",
+                             conversation_id, project_id)
+            project.processed_conversation_ids.append(conversation_id)
+            self.project_service.save_project(project)
+            raise
 
-        self.project_service.add_script(project, new_script)
-
+        # --- ElevenLabs sync phase ---
         project.sync_pending = False
         project.sync_pending_script_version = None
         if project.elevenlabs_agent_id:
@@ -125,7 +151,10 @@ class Pipeline:
             try:
                 await self.elevenlabs.update_agent_prompt(project.elevenlabs_agent_id, full_prompt)
                 project.last_prompt_update_at = datetime.now(timezone.utc)
+                logger.info("ElevenLabs agent %s prompt synced", project.elevenlabs_agent_id)
             except Exception:
+                logger.warning("ElevenLabs sync failed for agent %s, marking pending",
+                               project.elevenlabs_agent_id)
                 project.sync_pending = True
                 project.sync_pending_script_version = new_script.version
 
@@ -135,6 +164,7 @@ class Pipeline:
         project.processed_conversation_ids.append(conversation_id)
         self.project_service.save_project(project)
 
+        # --- SSE events ---
         await self.sse.emit(
             project_id,
             "script_updated",
@@ -147,7 +177,7 @@ class Pipeline:
             },
         )
 
-        if safety_result.status in {"sanitized", "fallback"}:
+        if safety_result and safety_result.status in {"sanitized", "fallback"}:
             await self.sse.emit(
                 project_id,
                 "prompt_sanitized",
@@ -159,7 +189,7 @@ class Pipeline:
                 },
             )
 
-        if safety_result.topic_redirect_applied:
+        if safety_result and safety_result.topic_redirect_applied:
             await self.sse.emit(
                 project_id,
                 "topic_redirect_applied",

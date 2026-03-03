@@ -72,7 +72,7 @@ class FakeDesigner:
             changes_summary="Init",
         )
 
-    def build_interviewer_prompt(self, script):
+    def build_interviewer_prompt(self, script, language="en"):
         return f"SCRIPT {script.version}"
 
 
@@ -102,7 +102,7 @@ class PersonalizingDesigner(FakeDesigner):
             changes_summary="Updated with memory",
         )
 
-    def build_interviewer_prompt(self, script):
+    def build_interviewer_prompt(self, script, language="en"):
         return (
             f"OPEN={script.opening_question}\n"
             f"Q={script.sections[0].main_question}\n"
